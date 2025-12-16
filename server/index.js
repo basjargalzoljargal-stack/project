@@ -2,13 +2,15 @@ import express from "express";
 import pkg from "pg";
 import bcrypt from "bcrypt";
 import cors from "cors";
-import dotenv from "dotenv";
 
-dotenv.config();
+// Render дээр dotenv хэрэггүй
+// import dotenv from "dotenv";
+// dotenv.config();
 
 const { Pool } = pkg;
 
 console.log("🔥 SERVER FILE LOADED");
+console.log("📊 DATABASE_URL байна уу?", !!process.env.DATABASE_URL);
 
 const app = express();
 
@@ -49,6 +51,7 @@ pool.on("error", (err) => {
 ====================== */
 const initDB = async () => {
   try {
+    console.log("🔄 Table үүсгэж байна...");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -59,7 +62,7 @@ const initDB = async () => {
     `);
     console.log("✅ users table бэлэн боллоо");
   } catch (err) {
-    console.error("❌ Table үүсгэх алдаа:", err);
+    console.error("❌ Table үүсгэх алдаа:", err.message);
   }
 };
 

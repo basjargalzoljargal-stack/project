@@ -1,0 +1,143 @@
+import { useState, useRef, useEffect } from 'react';
+import { Download, Printer, FileText, Table } from 'lucide-react';
+import { DocumentFormData } from './DocumentModal';
+import { exportDocumentsToPDF, exportDocumentsToExcel, printDocuments } from '../utils/documentExport';
+
+interface DocumentExportMenuProps {
+  documents: DocumentFormData[];
+}
+
+export default function DocumentExportMenu({ documents }: DocumentExportMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handlePrintAll = () => {
+    printDocuments(documents, 'all');
+    setIsOpen(false);
+  };
+
+  const handlePrintResponseRequired = () => {
+    printDocuments(documents, 'response-required');
+    setIsOpen(false);
+  };
+
+  const handlePrintOverdue = () => {
+    printDocuments(documents, 'overdue');
+    setIsOpen(false);
+  };
+
+  const handlePrintMonthly = () => {
+    printDocuments(documents, 'monthly');
+    setIsOpen(false);
+  };
+
+  const handlePrintByCategory = (category: string) => {
+    printDocuments(documents, 'by-category', category);
+    setIsOpen(false);
+  };
+
+  const handleExportPDF = (type: 'all' | 'response-required' | 'monthly') => {
+    exportDocumentsToPDF(documents, type);
+    setIsOpen(false);
+  };
+
+  const handleExportExcel = () => {
+    exportDocumentsToExcel(documents);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+      >
+        <Download className="w-4 h-4" />
+        Export / Print
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-50 max-h-[500px] overflow-y-auto">
+          <div className="px-3 py-2 border-b border-slate-200">
+            <p className="text-xs font-semibold text-slate-700 uppercase">Хэвлэх</p>
+          </div>
+
+          <button
+            onClick={handlePrintAll}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" />
+            Бүх албан бичиг
+          </button>
+
+          <button
+            onClick={handlePrintResponseRequired}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" />
+            Хариу өгөх шаардлагатай
+          </button>
+
+          <button
+            onClick={handlePrintOverdue}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" />
+            Хугацаа хэтэрсэн
+          </button>
+
+          <button
+            onClick={handlePrintMonthly}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" />
+            Энэ сарын тайлан
+          </button>
+
+          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">
+            <p className="text-xs font-semibold text-slate-700 uppercase">PDF татах</p>
+          </div>
+
+          <button
+            onClick={() => handleExportPDF('all')}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Бүх албан бичиг
+          </button>
+
+          <button
+            onClick={() => handleExportPDF('response-required')}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Хариу өгөх шаардлагатай
+          </button>
+
+          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">
+            <p className="text-xs font-semibold text-slate-700 uppercase">Excel татах</p>
+          </div>
+
+          <button
+            onClick={handleExportExcel}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Table className="w-4 h-4" />
+            Бүх албан бичиг (Excel)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

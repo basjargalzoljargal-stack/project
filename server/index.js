@@ -30,8 +30,13 @@ app.use(express.json());
 /* ======================
    POSTGRESQL CONNECTION
 ====================== */
+const DATABASE_URL = process.env.DATABASE_URL || 
+  "postgres://my_website_db_n944_user:PKpRzcXr5qDiDIz7IUeOqL7Tduy3SiB3@dpg-d50bmj5actks73f0qp20-a.oregon-postgres.render.com/my_website_db_n944";
+
+console.log("🔗 Database URL эхлэл:", DATABASE_URL.substring(0, 30) + "...");
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }

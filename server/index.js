@@ -20,8 +20,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    // frontend deploy хийсний дараа энд нэмнэ
-    // "https://your-frontend.onrender.com"
+    "https://my-planning-app-frontend.onrender.com"
   ],
   credentials: true
 }));

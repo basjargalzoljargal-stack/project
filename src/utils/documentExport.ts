@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import html2pdf from 'html2pdf.js';
 import * as XLSX from 'xlsx';
 import { DocumentFormData } from '../components/DocumentModal';
 
@@ -34,17 +33,13 @@ export const filterDocumentsByType = (
   }
 };
 
+// ✅ ШИНЭ: HTML2PDF ашиглах - Монгол үсэг 100% ажиллана!
 export const exportDocumentsToPDF = (
   documents: DocumentFormData[],
   type: DocumentReportType,
   category?: string
 ) => {
-  const doc = new jsPDF();
   const filteredDocs = filterDocumentsByType(documents, type, category);
-
-  // ✅ ШИНЭ: Roboto фонт нэмэх (Cyrillic дэмжинэ)
-  // Эсвэл 'times' фонт ашиглах (jsPDF-д анхнаас байдаг, Cyrillic дэмжинэ)
-  doc.setFont('times', 'normal');
 
   let title = 'Албан бичгийн тайлан';
   switch (type) {
@@ -65,12 +60,6 @@ export const exportDocumentsToPDF = (
       break;
   }
 
-  doc.setFontSize(18);
-  doc.text(title, 14, 20);
-
-  doc.setFontSize(10);
-  doc.text(`Хэвлэсэн огноо: ${new Date().toLocaleDateString('mn-MN')}`, 14, 28);
-
   const completedCount = filteredDocs.filter(d => d.status === 'Completed').length;
   const pendingCount = filteredDocs.filter(d => d.status === 'Pending').length;
   const inProgressCount = filteredDocs.filter(d => d.status === 'In Progress').length;
@@ -79,52 +68,97 @@ export const exportDocumentsToPDF = (
     return new Date(d.deadline) < new Date();
   }).length;
 
-  doc.setFontSize(12);
-  doc.text('Нэгтгэл:', 14, 38);
-  doc.setFontSize(10);
-  doc.text(`Нийт: ${filteredDocs.length}`, 14, 45);
-  doc.text(`Дууссан: ${completedCount}`, 14, 51);
-  doc.text(`Хийгдэж байгаа: ${inProgressCount}`, 14, 57);
-  doc.text(`Хүлээгдэж буй: ${pendingCount}`, 14, 63);
-  if (overdueCount > 0) {
-    doc.text(`Хугацаа хэтэрсэн: ${overdueCount}`, 14, 69);
-  }
+  // HTML контент үүсгэх
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #000;">
+      <div style="border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 20px;">
+        <h1 style="margin: 0 0 10px 0; font-size: 24px; color: #111827;">${title}</h1>
+        <div style="color: #6b7280; font-size: 12px;">
+          Хэвлэсэн огноо: ${new Date().toLocaleDateString('mn-MN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}
+        </div>
+      </div>
 
-  const tableData = filteredDocs.map((doc, index) => [
-    (index + 1).toString(),
-    doc.document_number,
-    doc.sender,
-    doc.summary,
-    doc.deadline ? new Date(doc.deadline).toLocaleDateString('mn-MN') : '-',
-    doc.status,
-  ]);
+      <div style="display: grid; grid-template-columns: repeat(${overdueCount > 0 ? '4' : '3'}, 1fr); gap: 10px; margin: 20px 0;">
+        <div style="border: 1px solid #d1d5db; padding: 15px; text-align: center; border-radius: 4px;">
+          <div style="font-size: 24px; font-weight: bold; color: #111827;">${filteredDocs.length}</div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Нийт</div>
+        </div>
+        <div style="border: 1px solid #d1d5db; padding: 15px; text-align: center; border-radius: 4px;">
+          <div style="font-size: 24px; font-weight: bold; color: #111827;">${completedCount}</div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Дууссан</div>
+        </div>
+        <div style="border: 1px solid #d1d5db; padding: 15px; text-align: center; border-radius: 4px;">
+          <div style="font-size: 24px; font-weight: bold; color: #111827;">${inProgressCount + pendingCount}</div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Хийгдэж байгаа</div>
+        </div>
+        ${overdueCount > 0 ? `
+        <div style="border: 1px solid #d1d5db; padding: 15px; text-align: center; border-radius: 4px;">
+          <div style="font-size: 24px; font-weight: bold; color: #111827;">${overdueCount}</div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Хугацаа хэтэрсэн</div>
+        </div>
+        ` : ''}
+      </div>
 
-  autoTable(doc, {
-    startY: overdueCount > 0 ? 75 : 70,
-    head: [['№', 'Дугаар', 'Илгээгч', 'Товч агуулга', 'Эцсийн хугацаа', 'Төлөв']],
-    body: tableData,
-    theme: 'grid',
-    headStyles: { 
-      fillColor: [15, 23, 42],
-      font: 'times', // ✅ Cyrillic дэмжих фонт
-      fontStyle: 'bold'
-    },
-    styles: { 
-      fontSize: 8,
-      font: 'times' // ✅ Cyrillic дэмжих фонт
-    },
-    columnStyles: {
-      0: { cellWidth: 10 },
-      1: { cellWidth: 25 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 60 },
-      4: { cellWidth: 30 },
-      5: { cellWidth: 25 },
-    },
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+          <tr>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 5%;">№</th>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 15%;">Дугаар</th>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 20%;">Илгээгч</th>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 35%;">Товч агуулга</th>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: center; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 15%;">Эцсийн хугацаа</th>
+            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; font-weight: 600; font-size: 11px; width: 10%;">Төлөв</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredDocs.length === 0 ? `
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 20px; border: 1px solid #d1d5db;">Албан бичиг олдсонгүй</td>
+            </tr>
+          ` : filteredDocs.map((doc, index) => {
+            const isOverdue = doc.deadline && doc.status !== 'Completed' && new Date(doc.deadline) < new Date();
+            return `
+              <tr>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 10px; text-align: center;">${index + 1}</td>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 10px;">
+                  <strong>${doc.document_number}</strong><br/>
+                  <span style="font-size: 9px; color: #6b7280;">${new Date(doc.received_date).toLocaleDateString('mn-MN')}</span>
+                </td>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 10px;">${doc.sender}</td>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 9px;">${doc.summary}</td>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 10px; text-align: center;">
+                  ${doc.deadline ? `<span style="padding: 2px 8px; border-radius: 4px; font-size: 9px; background-color: ${isOverdue ? '#fee2e2' : '#e5e7eb'}; color: ${isOverdue ? '#991b1b' : '#374151'};">${new Date(doc.deadline).toLocaleDateString('mn-MN')}</span>` : '<span style="color: #9ca3af;">-</span>'}
+                </td>
+                <td style="padding: 10px 12px; border: 1px solid #d1d5db; font-size: 10px;">${doc.status}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Түр element үүсгэх
+  const element = document.createElement('div');
+  element.innerHTML = htmlContent;
+  document.body.appendChild(element);
+
+  // PDF үүсгэх
+  const options = {
+    margin: 10,
+    filename: `documents-${type}-${new Date().toISOString().split('T')[0]}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(options).from(element).save().then(() => {
+    document.body.removeChild(element);
   });
-
-  const filename = `documents-${type}-${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(filename);
 };
 
 export const exportDocumentsToExcel = (documents: DocumentFormData[]) => {
@@ -279,25 +313,12 @@ export const printDocuments = (
       font-size: 10px;
       font-weight: 500;
     }
-    .response-required { background-color: #fed7aa; color: #9a3412; }
-    .informational { background-color: #e5e7eb; color: #374151; }
-    .instruction { background-color: #dbeafe; color: #1e40af; }
-    .organizational { background-color: #e9d5ff; color: #6b21a8; }
     .completed { background-color: #d1fae5; color: #065f46; }
     .in-progress { background-color: #dbeafe; color: #1e40af; }
     .pending { background-color: #e5e7eb; color: #374151; }
     .overdue { background-color: #fee2e2; color: #991b1b; }
-    .footer {
-      margin-top: 30px;
-      padding-top: 10px;
-      border-top: 1px solid #d1d5db;
-      font-size: 12px;
-      color: #6b7280;
-      text-align: center;
-    }
     @media print {
       body { padding: 0; }
-      .no-print { display: none; }
     }
   </style>
 </head>
@@ -367,10 +388,6 @@ export const printDocuments = (
       }).join('')}
     </tbody>
   </table>
-
-  <div class="footer">
-    Энэхүү тайлан нь автоматаар үүсгэгдсэн болно.
-  </div>
 
   <script>
     window.onload = function() {

@@ -42,6 +42,10 @@ export const exportDocumentsToPDF = (
   const doc = new jsPDF();
   const filteredDocs = filterDocumentsByType(documents, type, category);
 
+  // ✅ ШИНЭ: Roboto фонт нэмэх (Cyrillic дэмжинэ)
+  // Эсвэл 'times' фонт ашиглах (jsPDF-д анхнаас байдаг, Cyrillic дэмжинэ)
+  doc.setFont('times', 'normal');
+
   let title = 'Албан бичгийн тайлан';
   switch (type) {
     case 'all':
@@ -100,8 +104,15 @@ export const exportDocumentsToPDF = (
     head: [['№', 'Дугаар', 'Илгээгч', 'Товч агуулга', 'Эцсийн хугацаа', 'Төлөв']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [15, 23, 42] },
-    styles: { fontSize: 8 },
+    headStyles: { 
+      fillColor: [15, 23, 42],
+      font: 'times', // ✅ Cyrillic дэмжих фонт
+      fontStyle: 'bold'
+    },
+    styles: { 
+      fontSize: 8,
+      font: 'times' // ✅ Cyrillic дэмжих фонт
+    },
     columnStyles: {
       0: { cellWidth: 10 },
       1: { cellWidth: 25 },

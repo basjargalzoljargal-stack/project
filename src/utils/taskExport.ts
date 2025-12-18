@@ -38,6 +38,9 @@ export const exportTasksToPDF = (
 ) => {
   const doc = new jsPDF();
 
+  // ✅ ШИНЭ: Times фонт ашиглах (Cyrillic дэмжинэ)
+  doc.setFont('times', 'normal');
+
   doc.setFontSize(18);
   doc.text('Ажлын төлөвлөгөө', 14, 20);
 
@@ -91,8 +94,15 @@ export const exportTasksToPDF = (
     head: [['№', 'Төлөвлөгөөний нэр', 'Биелэх огноо', 'Төлөв']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [15, 23, 42] },
-    styles: { fontSize: 9 },
+    headStyles: { 
+      fillColor: [15, 23, 42],
+      font: 'times', // ✅ Cyrillic дэмжих фонт
+      fontStyle: 'bold'
+    },
+    styles: { 
+      fontSize: 9,
+      font: 'times' // ✅ Cyrillic дэмжих фонт
+    },
     columnStyles: {
       0: { cellWidth: 10 },
       1: { cellWidth: 90 },

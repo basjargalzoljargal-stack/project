@@ -3,10 +3,6 @@ import pkg from "pg";
 import bcrypt from "bcrypt";
 import cors from "cors";
 
-// Render дээр dotenv хэрэггүй
-// import dotenv from "dotenv";
-// dotenv.config();
-
 const { Pool } = pkg;
 
 console.log("🔥 SERVER FILE LOADED");
@@ -51,11 +47,13 @@ pool.on("error", (err) => {
 });
 
 /* ======================
-   AUTO CREATE TABLE
+   AUTO CREATE TABLE & MIGRATION
 ====================== */
 const initDB = async () => {
   try {
-    console.log("🔄 Table үүсгэж байна...");
+    console.log("🔄 Database шалгаж байна...");
+    
+    // 1. Users table үүсгэх
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -64,9 +62,64 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("✅ users table бэлэн боллоо");
+    
+    // 2. Шинэ багануудыг нэмэх (хэрэв байхгүй бол)
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user';`);
+      console.log("✅ role багана нэмэгдлээ");
+    } catch (err) {
+      console.log("ℹ️ role багана аль хэдийн байна");
+    }
+    
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT false;`);
+      console.log("✅ approved багана нэмэгдлээ");
+    } catch (err) {
+      console.log("ℹ️ approved багана аль хэдийн байна");
+    }
+    
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;`);
+      console.log("✅ last_login багана нэмэгдлээ");
+    } catch (err) {
+      console.log("ℹ️ last_login багана аль хэдийн байна");
+    }
+    
+    // 3. Индекс үүсгэх
+    try {
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_approved ON users(approved);`);
+      console.log("✅ Индексүүд үүсгэгдлээ");
+    } catch (err) {
+      console.log("ℹ️ Индексүүд аль хэдийн байна");
+    }
+    
+    // 4. Эхний админ үүсгэх (хэрэв байхгүй бол)
+    const adminCheck = await pool.query(`SELECT * FROM users WHERE username = 'admin';`);
+    
+    if (adminCheck.rows.length === 0) {
+      // "admin" хэрэглэгч байхгүй бол үүсгэнэ
+      const adminPassword = 'Mongol1990';
+      const hash = await bcrypt.hash(adminPassword, 10);
+      
+      await pool.query(
+        `INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4);`,
+        ['admin', hash, 'admin', true]
+      );
+      
+      console.log("✅ Анхны админ үүсгэгдлээ (username: admin, password: Mongol1990)");
+    } else {
+      // Байгаа "admin" хэрэглэгчийг админ болгох
+      await pool.query(
+        `UPDATE users SET role = 'admin', approved = true WHERE username = 'admin';`
+      );
+      console.log("✅ 'admin' хэрэглэгч админ эрхтэй боллоо");
+    }
+    
+    console.log("✅ Database бэлэн боллоо!");
+    
   } catch (err) {
-    console.error("❌ Table үүсгэх алдаа:", err.message);
+    console.error("❌ Database засалт хийх алдаа:", err.message);
   }
 };
 
@@ -127,22 +180,23 @@ app.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
+    // ✅ ШИНЭ: approved = false (админ зөвшөөрөх хүртэл)
     await pool.query(
-      "INSERT INTO users (username, password_hash) VALUES ($1, $2)",
-      [username, hash]
+      "INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4)",
+      [username, hash, 'user', false]
     );
 
-    console.log(`✅ Шинэ хэрэглэгч бүртгэгдлээ: ${username}`);
+    console.log(`✅ Шинэ хэрэглэгч бүртгэгдлээ: ${username} (зөвшөөрөл хүлээгдэж байна)`);
 
     res.status(201).json({
       success: true,
-      message: "Амжилттай бүртгэгдлээ"
+      message: "Амжилттай бүртгэгдлээ. Админы зөвшөөрлийг хүлээнэ үү."
     });
 
   } catch (err) {
     console.error("❌ Бүртгэлийн алдаа:", err);
 
-    if (err.code === "23505") { // PostgreSQL duplicate key
+    if (err.code === "23505") {
       return res.status(400).json({
         success: false,
         message: "Энэ хэрэглэгчийн нэр аль хэдийн бүртгэлтэй байна"
@@ -185,6 +239,15 @@ app.post("/login", async (req, res) => {
     }
 
     const user = result.rows[0];
+    
+    // ✅ ШИНЭ: Зөвшөөрөл шалгах
+    if (!user.approved && user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: "Таны бүртгэл хараахан зөвшөөрөгдөөгүй байна. Админтай холбогдоно уу."
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
@@ -194,17 +257,204 @@ app.post("/login", async (req, res) => {
       });
     }
 
+    // ✅ ШИНЭ: Сүүлд нэвтэрсэн хугацааг хадгалах
+    await pool.query(
+      "UPDATE users SET last_login = NOW() WHERE id = $1",
+      [user.id]
+    );
+
     console.log(`✅ Амжилттай нэвтэрлээ: ${username}`);
 
     res.json({
       success: true,
       message: "Амжилттай нэвтэрлээ",
       userId: user.id,
-      username: user.username
+      username: user.username,
+      role: user.role // ✅ ШИНЭ: Role буцаах
     });
 
   } catch (err) {
     console.error("❌ Нэвтрэх алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: GET ALL USERS
+====================== */
+app.get("/admin/users", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        username, 
+        role, 
+        approved, 
+        last_login,
+        created_at 
+      FROM users 
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      users: result.rows
+    });
+
+  } catch (err) {
+    console.error("❌ Хэрэглэгчдийг авах алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: APPROVE USER
+====================== */
+app.post("/admin/users/:userId/approve", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await pool.query(
+      "UPDATE users SET approved = true WHERE id = $1",
+      [userId]
+    );
+
+    console.log(`✅ Хэрэглэгч зөвшөөрөгдлөө: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Хэрэглэгч зөвшөөрөгдлөө"
+    });
+
+  } catch (err) {
+    console.error("❌ Зөвшөөрөх алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: REJECT USER
+====================== */
+app.post("/admin/users/:userId/reject", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await pool.query(
+      "UPDATE users SET approved = false WHERE id = $1",
+      [userId]
+    );
+
+    console.log(`❌ Хэрэглэгч цуцлагдлаа: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Хэрэглэгч цуцлагдлаа"
+    });
+
+  } catch (err) {
+    console.error("❌ Цуцлах алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: DELETE USER
+====================== */
+app.delete("/admin/users/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await pool.query(
+      "DELETE FROM users WHERE id = $1",
+      [userId]
+    );
+
+    console.log(`🗑️ Хэрэглэгч устгагдлаа: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Хэрэглэгч устгагдлаа"
+    });
+
+  } catch (err) {
+    console.error("❌ Устгах алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: CHANGE ROLE
+====================== */
+app.post("/admin/users/:userId/role", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!['admin', 'user'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Буруу эрх"
+      });
+    }
+
+    await pool.query(
+      "UPDATE users SET role = $1 WHERE id = $2",
+      [role, userId]
+    );
+
+    console.log(`✅ Хэрэглэгчийн эрх өөрчлөгдлөө: ${userId} -> ${role}`);
+
+    res.json({
+      success: true,
+      message: "Эрх өөрчлөгдлөө"
+    });
+
+  } catch (err) {
+    console.error("❌ Эрх өөрчлөх алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   ADMIN: STATISTICS
+====================== */
+app.get("/admin/stats", async (req, res) => {
+  try {
+    const totalUsers = await pool.query("SELECT COUNT(*) FROM users");
+    const approvedUsers = await pool.query("SELECT COUNT(*) FROM users WHERE approved = true");
+    const pendingUsers = await pool.query("SELECT COUNT(*) FROM users WHERE approved = false");
+    const adminUsers = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+
+    res.json({
+      success: true,
+      stats: {
+        total: parseInt(totalUsers.rows[0].count),
+        approved: parseInt(approvedUsers.rows[0].count),
+        pending: parseInt(pendingUsers.rows[0].count),
+        admins: parseInt(adminUsers.rows[0].count)
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Статистик авах алдаа:", err);
     res.status(500).json({
       success: false,
       message: "Серверийн алдаа гарлаа"

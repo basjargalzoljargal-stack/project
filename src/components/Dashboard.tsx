@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, Plus, Edit2, Trash2, Calendar as CalendarIcon, FileIcon, Repeat } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, Plus, Edit2, Trash2, Calendar as CalendarIcon, FileIcon, Repeat, Shield } from 'lucide-react';
 import Sidebar from './Sidebar';
 import CalendarPreview from './CalendarPreview';
 import CalendarPage from './CalendarPage';
 import DocumentsPage from './DocumentsPage';
+import AdminPage from './AdminPage';
 import TaskModal, { TaskFormData } from './TaskModal';
 import TaskExportMenu from './TaskExportMenu';
 import TaskCharts from './TaskCharts';
@@ -17,8 +18,9 @@ interface DashboardProps {
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'quarter' | 'year';
 
 export default function Dashboard({ onLogout }: DashboardProps) {
-  const { signOut } = useAuth();
+  const { signOut, userRole } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
+  const [showAdmin, setShowAdmin] = useState(false);
   const [tasks, setTasks] = useState<TaskFormData[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskFormData | null>(null);
@@ -31,6 +33,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     filterLabel: string;
     stats: { total: number; completed: number; overdue: number; pending: number };
   } | null>(null);
+
+  // Админ панел харуулах
+  if (showAdmin) {
+    return <AdminPage onBack={() => setShowAdmin(false)} />;
+  }
 
   const loadTasks = () => {
     setLoading(true);
@@ -96,11 +103,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Filter by year: include tasks with valid dueDate matching selectedYear,
-    // or tasks without a valid dueDate (shown in current year by default)
     let filtered = tasks.filter(task => {
       if (!task.dueDate || !task.dueDate.trim()) {
-        // Tasks without a due date are shown in the current year
         return selectedYear === new Date().getFullYear();
       }
 
@@ -108,7 +112,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       const taskYear = taskDate.getFullYear();
 
       if (isNaN(taskYear)) {
-        // Invalid dates are shown in the current year
         return selectedYear === new Date().getFullYear();
       }
 
@@ -121,13 +124,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
     return filtered.filter(task => {
       if (!task.dueDate || !task.dueDate.trim()) {
-        return false; // Tasks without due date don't match time filters
+        return false;
       }
 
       const taskDate = new Date(task.dueDate);
 
       if (isNaN(taskDate.getTime())) {
-        return false; // Invalid dates don't match time filters
+        return false;
       }
 
       switch (timeFilter) {
@@ -176,7 +179,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }).length;
   const pendingTasks = filteredTasks.filter(t => {
     if (t.completed) return false;
-    if (!t.dueDate || !t.dueDate.trim()) return true; // Tasks without due date are considered pending
+    if (!t.dueDate || !t.dueDate.trim()) return true;
     const dueDate = new Date(t.dueDate);
     if (isNaN(dueDate.getTime())) return true;
     dueDate.setHours(0, 0, 0, 0);
@@ -631,7 +634,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
+      <Sidebar 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        onLogout={handleLogout}
+        userRole={userRole}
+        onAdminClick={() => setShowAdmin(true)}
+      />
 
       <main className={`flex-1 ml-64 p-8 ${isPrinting ? 'print:hidden' : ''}`}>
         {renderContent()}

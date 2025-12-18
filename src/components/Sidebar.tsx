@@ -1,12 +1,14 @@
-import { Home, FileText, Calendar, Settings, LogOut } from 'lucide-react';
+import { Home, FileText, Calendar, Settings, LogOut, Shield } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
+  userRole?: string | null;
+  onAdminClick?: () => void;
 }
 
-export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, onLogout, userRole, onAdminClick }: SidebarProps) {
   const menuItems = [
     { id: 'home', label: 'Нүүр', icon: Home },
     { id: 'documents', label: 'Албан бичиг', icon: FileText },
@@ -49,6 +51,19 @@ export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarPro
               </li>
             );
           })}
+          
+          {/* ✅ АДМИН ТОВЧ - Зөвхөн админд харагдана */}
+          {userRole === 'admin' && onAdminClick && (
+            <li>
+              <button
+                onClick={onAdminClick}
+                className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <Shield className="w-5 h-5" />
+                <span className="font-medium">Админ Панель</span>
+              </button>
+            </li>
+          )}
         </ul>
       </nav>
 

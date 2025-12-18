@@ -94,26 +94,25 @@ const initDB = async () => {
       console.log("ℹ️ Индексүүд аль хэдийн байна");
     }
     
-    // 4. Эхний админ үүсгэх (хэрэв байхгүй бол)
+    // 4. Админ үүсгэх/нууц үг reset хийх
     const adminCheck = await pool.query(`SELECT * FROM users WHERE username = 'admin';`);
+    const adminPassword = 'Mongol1990';
+    const hash = await bcrypt.hash(adminPassword, 10);
     
     if (adminCheck.rows.length === 0) {
       // "admin" хэрэглэгч байхгүй бол үүсгэнэ
-      const adminPassword = 'Mongol1990';
-      const hash = await bcrypt.hash(adminPassword, 10);
-      
       await pool.query(
         `INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4);`,
         ['admin', hash, 'admin', true]
       );
-      
       console.log("✅ Анхны админ үүсгэгдлээ (username: admin, password: Mongol1990)");
     } else {
-      // Байгаа "admin" хэрэглэгчийг админ болгох
+      // Байгаа admin хэрэглэгчийг засах: нууц үг + эрх
       await pool.query(
-        `UPDATE users SET role = 'admin', approved = true WHERE username = 'admin';`
+        `UPDATE users SET password_hash = $1, role = 'admin', approved = true WHERE username = 'admin';`,
+        [hash]
       );
-      console.log("✅ 'admin' хэрэглэгч админ эрхтэй боллоо");
+      console.log("✅ 'admin' хэрэглэгч засагдлаа - нууц үг: Mongol1990");
     }
     
     console.log("✅ Database бэлэн боллоо!");

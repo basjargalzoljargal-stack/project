@@ -13,13 +13,13 @@ export default function DocumentExportMenu({ documents }: DocumentExportMenuProp
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) { 
         setIsOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside); 
   }, []);
 
   const handlePrintAll = () => {
@@ -47,7 +47,8 @@ export default function DocumentExportMenu({ documents }: DocumentExportMenuProp
     setIsOpen(false);
   };
 
-  const handleExportPDF = (type: 'all' | 'response-required' | 'monthly') => {
+  // ✅ ЗАСАГДСАН: PDF татах функц - overdue нэмсэн
+  const handleExportPDF = (type: 'all' | 'response-required' | 'monthly' | 'overdue') => {  
     exportDocumentsToPDF(documents, type);
     setIsOpen(false);
   };
@@ -69,6 +70,7 @@ export default function DocumentExportMenu({ documents }: DocumentExportMenuProp
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-50 max-h-[500px] overflow-y-auto">
+          {/* ХЭВЛЭХ ХЭСЭГ */}
           <div className="px-3 py-2 border-b border-slate-200">
             <p className="text-xs font-semibold text-slate-700 uppercase">Хэвлэх</p>
           </div>
@@ -105,7 +107,8 @@ export default function DocumentExportMenu({ documents }: DocumentExportMenuProp
             Энэ сарын тайлан
           </button>
 
-          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">
+          {/* PDF ТАТАХ ХЭСЭГ */}
+          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">   
             <p className="text-xs font-semibold text-slate-700 uppercase">PDF татах</p>
           </div>
 
@@ -125,7 +128,26 @@ export default function DocumentExportMenu({ documents }: DocumentExportMenuProp
             Хариу өгөх шаардлагатай
           </button>
 
-          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">
+          {/* ✅ ШИНЭЭР НЭМСЭН: Хугацаа хэтэрсэн PDF */}
+          <button
+            onClick={() => handleExportPDF('overdue')}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Хугацаа хэтэрсэн
+          </button>
+
+          {/* ✅ ШИНЭЭР НЭМСЭН: Сарын тайлан PDF */}
+          <button
+            onClick={() => handleExportPDF('monthly')}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Энэ сарын тайлан
+          </button>
+
+          {/* EXCEL ТАТАХ ХЭСЭГ */}
+          <div className="px-3 py-2 border-b border-t border-slate-200 mt-2">   
             <p className="text-xs font-semibold text-slate-700 uppercase">Excel татах</p>
           </div>
 

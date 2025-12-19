@@ -34,11 +34,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     stats: { total: number; completed: number; overdue: number; pending: number };
   } | null>(null);
 
-  // Админ панел харуулах
-  if (showAdmin) {
-    return <AdminPage onBack={() => setShowAdmin(false)} />;
-  }
-
   const loadTasks = () => {
     setLoading(true);
     const loadedTasks = getTasks();
@@ -633,25 +628,29 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-        onLogout={handleLogout}
-        userRole={userRole}
-        onAdminClick={() => setShowAdmin(true)}
-      />
+    <>
+      {showAdmin ? (
+        <AdminPage onBack={() => setShowAdmin(false)} />
+      ) : (
+        <div className="min-h-screen bg-slate-50 flex">
+          <Sidebar 
+            activeTab={activeTab} 
+            onTabChange={setActiveTab} 
+            onLogout={handleLogout}
+            userRole={userRole}
+            onAdminClick={() => setShowAdmin(true)}
+          />
 
-      <main className={`flex-1 ml-64 p-8 ${isPrinting ? 'print:hidden' : ''}`}>
-        {renderContent()}
-      </main>
+          <main className={`flex-1 ml-64 p-8 ${isPrinting ? 'print:hidden' : ''}`}>
+            {renderContent()}
+          </main>
 
-      <TaskModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveTask}
-        task={editingTask}
-      />
+          <TaskModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onSave={handleSaveTask}
+            task={editingTask}
+          />
 
       {isPrinting && printData && (
         <div className="hidden print:block print:p-8">
@@ -749,6 +748,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      )}
+    </>
   );
 }

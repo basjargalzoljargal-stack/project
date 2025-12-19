@@ -149,8 +149,8 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-xl">Ачааллаж байна...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl text-gray-700">Ачааллаж байна...</div>
       </div>
     );
   }

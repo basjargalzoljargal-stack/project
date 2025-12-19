@@ -19,25 +19,23 @@ interface Stats {
 
 const API_URL = "https://my-website-backend-3yoe.onrender.com";
 
-export default function AdminPage({ onBack }: { onBack: () => void }) {
+interface AdminPageProps {
+  onBack: () => void;
+}
+
+export default function AdminPage({ onBack }: AdminPageProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, approved: 0, pending: 0, admins: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('all');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Хэрэглэгчдийг авах
       const usersRes = await fetch(`${API_URL}/admin/users`);
       const usersData = await usersRes.json();
       
-      // Статистик авах
       const statsRes = await fetch(`${API_URL}/admin/stats`);
       const statsData = await statsRes.json();
 
@@ -51,11 +49,14 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
 
     } catch (error) {
       console.error('Өгөгдөл татах алдаа:', error);
-      alert('Өгөгдөл татахад алдаа гарлаа');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const approveUser = async (userId: number) => {
     try {
@@ -65,14 +66,10 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
       const data = await res.json();
 
       if (data.success) {
-        alert('Хэрэглэгч зөвшөөрөгдлөө!');
         loadData();
-      } else {
-        alert(data.message || 'Алдаа гарлаа');
       }
     } catch (error) {
       console.error('Зөвшөөрөх алдаа:', error);
-      alert('Зөвшөөрөхөд алдаа гарлаа');
     }
   };
 
@@ -84,19 +81,15 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
       const data = await res.json();
 
       if (data.success) {
-        alert('Хэрэглэгч цуцлагдлаа!');
         loadData();
-      } else {
-        alert(data.message || 'Алдаа гарлаа');
       }
     } catch (error) {
       console.error('Цуцлах алдаа:', error);
-      alert('Цуцлахад алдаа гарлаа');
     }
   };
 
   const deleteUser = async (userId: number, username: string) => {
-    if (!confirm(`"${username}" хэрэглэгчийг устгахдаа итгэлтэй байна уу?`)) {
+    if (!window.confirm(`"${username}" хэрэглэгчийг устгах уу?`)) {
       return;
     }
 
@@ -107,14 +100,10 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
       const data = await res.json();
 
       if (data.success) {
-        alert('Хэрэглэгч устгагдлаа!');
         loadData();
-      } else {
-        alert(data.message || 'Алдаа гарлаа');
       }
     } catch (error) {
       console.error('Устгах алдаа:', error);
-      alert('Устгахад алдаа гарлаа');
     }
   };
 
@@ -130,14 +119,10 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
       const data = await res.json();
 
       if (data.success) {
-        alert('Эрх өөрчлөгдлөө!');
         loadData();
-      } else {
-        alert(data.message || 'Алдаа гарлаа');
       }
     } catch (error) {
       console.error('Эрх өөрчлөх алдаа:', error);
-      alert('Эрх өөрчлөхөд алдаа гарлаа');
     }
   };
 
@@ -158,7 +143,6 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -172,7 +156,6 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center justify-between">
@@ -215,7 +198,6 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Filter Tabs */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="flex border-b">
             <button
@@ -251,7 +233,6 @@ export default function AdminPage({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Users Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

@@ -100,20 +100,45 @@ const initDB = async () => {
     const hash = await bcrypt.hash(adminPassword, 10);
     
     if (adminCheck.rows.length === 0) {
-      // "admin" хэрэглэгч байхгүй бол үүсгэнэ
       await pool.query(
         `INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4);`,
         ['admin', hash, 'admin', true]
       );
       console.log("✅ Анхны админ үүсгэгдлээ (username: admin, password: Mongol1990)");
     } else {
-      // Байгаа admin хэрэглэгчийг засах: нууц үг + эрх
       await pool.query(
         `UPDATE users SET password_hash = $1, role = 'admin', approved = true WHERE username = 'admin';`,
         [hash]
       );
       console.log("✅ 'admin' хэрэглэгч засагдлаа - нууц үг: Mongol1990");
     }
+    
+    // 5. Tasks table үүсгэх
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        due_date TIMESTAMP NOT NULL,
+        status VARCHAR(50) DEFAULT 'Төлөвлөсөн',
+        priority VARCHAR(50) DEFAULT 'Дунд',
+        category VARCHAR(100),
+        completed BOOLEAN DEFAULT false,
+        file_name TEXT,
+        is_recurring BOOLEAN DEFAULT false,
+        recurrence_pattern VARCHAR(50),
+        recurrence_end_date TIMESTAMP,
+        parent_task_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 6. Tasks индексүүд
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);`);
+    console.log("✅ Tasks table үүсгэгдлээ");
     
     console.log("✅ Database бэлэн боллоо!");
     
@@ -179,7 +204,6 @@ app.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    // ✅ ШИНЭ: approved = false (админ зөвшөөрөх хүртэл)
     await pool.query(
       "INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4)",
       [username, hash, 'user', false]
@@ -239,7 +263,6 @@ app.post("/login", async (req, res) => {
 
     const user = result.rows[0];
     
-    // ✅ ШИНЭ: Зөвшөөрөл шалгах
     if (!user.approved && user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -256,7 +279,6 @@ app.post("/login", async (req, res) => {
       });
     }
 
-    // ✅ ШИНЭ: Сүүлд нэвтэрсэн хугацааг хадгалах
     await pool.query(
       "UPDATE users SET last_login = NOW() WHERE id = $1",
       [user.id]
@@ -269,7 +291,7 @@ app.post("/login", async (req, res) => {
       message: "Амжилттай нэвтэрлээ",
       userId: user.id,
       username: user.username,
-      role: user.role // ✅ ШИНЭ: Role буцаах
+      role: user.role
     });
 
   } catch (err) {
@@ -454,6 +476,139 @@ app.get("/admin/stats", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Статистик авах алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   TASKS: GET USER TASKS
+====================== */
+app.get("/tasks/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT * FROM tasks WHERE user_id = $1 ORDER BY due_date ASC`,
+      [userId]
+    );
+    
+    res.json({
+      success: true,
+      tasks: result.rows
+    });
+    
+  } catch (err) {
+    console.error("❌ Tasks авах алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   TASKS: CREATE TASK
+====================== */
+app.post("/tasks", async (req, res) => {
+  try {
+    const { 
+      id, userId, title, description, dueDate, status, priority, 
+      category, completed, fileName, isRecurring, recurrencePattern,
+      recurrenceEndDate, parentTaskId
+    } = req.body;
+    
+    await pool.query(
+      `INSERT INTO tasks (
+        id, user_id, title, description, due_date, status, priority,
+        category, completed, file_name, is_recurring, recurrence_pattern,
+        recurrence_end_date, parent_task_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [
+        id, userId, title, description, dueDate, status, priority,
+        category, completed, fileName, isRecurring, recurrencePattern,
+        recurrenceEndDate, parentTaskId
+      ]
+    );
+    
+    console.log(`✅ Төлөвлөгөө үүсгэгдлээ: ${title}`);
+    
+    res.json({
+      success: true,
+      message: "Төлөвлөгөө үүсгэгдлээ"
+    });
+    
+  } catch (err) {
+    console.error("❌ Task үүсгэх алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   TASKS: UPDATE TASK
+====================== */
+app.put("/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      title, description, dueDate, status, priority, category, 
+      completed, fileName, isRecurring, recurrencePattern,
+      recurrenceEndDate, parentTaskId
+    } = req.body;
+    
+    await pool.query(
+      `UPDATE tasks SET 
+        title = $1, description = $2, due_date = $3, status = $4,
+        priority = $5, category = $6, completed = $7, file_name = $8,
+        is_recurring = $9, recurrence_pattern = $10, recurrence_end_date = $11,
+        parent_task_id = $12, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $13`,
+      [
+        title, description, dueDate, status, priority, category,
+        completed, fileName, isRecurring, recurrencePattern,
+        recurrenceEndDate, parentTaskId, id
+      ]
+    );
+    
+    console.log(`✅ Төлөвлөгөө шинэчлэгдлээ: ${id}`);
+    
+    res.json({
+      success: true,
+      message: "Төлөвлөгөө шинэчлэгдлээ"
+    });
+    
+  } catch (err) {
+    console.error("❌ Task шинэчлэх алдаа:", err);
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа гарлаа"
+    });
+  }
+});
+
+/* ======================
+   TASKS: DELETE TASK
+====================== */
+app.delete("/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await pool.query("DELETE FROM tasks WHERE id = $1", [id]);
+    
+    console.log(`🗑️ Төлөвлөгөө устгагдлаа: ${id}`);
+    
+    res.json({
+      success: true,
+      message: "Төлөвлөгөө устгагдлаа"
+    });
+    
+  } catch (err) {
+    console.error("❌ Task устгах алдаа:", err);
     res.status(500).json({
       success: false,
       message: "Серверийн алдаа гарлаа"

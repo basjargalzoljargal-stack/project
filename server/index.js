@@ -14,11 +14,7 @@ const app = express();
    MIDDLEWARE
 ====================== */
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://my-planning-app-frontend.onrender.com"
-  ],
-  credentials: true
+  origin: "*"
 }));
 app.use(express.json());
 

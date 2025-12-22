@@ -14,6 +14,8 @@ export interface TaskFormData {
   recurrencePattern?: string;
   recurrenceEndDate?: string;
   parentTaskId?: string;
+  document_id?: string;
+  createdAt?: string;
 }
 
 export const getTasks = (): TaskFormData[] => {
@@ -53,4 +55,9 @@ export const deleteTask = (taskId: string): void => {
   const tasks = getTasks();
   const filtered = tasks.filter(t => t.id !== taskId);
   localStorage.setItem('tasks', JSON.stringify(filtered));
+};
+
+export const getTasksByDocumentId = (documentId: string): TaskFormData[] => {
+  const tasks = getTasks();
+  return tasks.filter(task => task.document_id === documentId);
 };

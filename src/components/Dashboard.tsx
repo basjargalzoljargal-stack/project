@@ -34,13 +34,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     stats: { total: number; completed: number; overdue: number; pending: number };
   } | null>(null);
 
-  const loadTasks = () => {
-    setLoading(true);
-    const loadedTasks = getTasks();
-    setTasks(loadedTasks);
-    setLoading(false);
-  };
-
+ const loadTasks = async () => {
+  setLoading(true);
+  const loadedTasks = await getTasks();
+  setTasks(loadedTasks);
+  setLoading(false);
+};
   useEffect(() => {
     loadTasks();
   }, []);

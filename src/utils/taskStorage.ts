@@ -1,137 +1,212 @@
-import { TaskFormData } from '../components/TaskModal';
-import { generateRecurringTasks, shouldRegenerateRecurringTasks } from './recurringTasks';
+// Task Storage with Backend API Integration
 
-const STORAGE_KEY = 'tasks';
+const API_URL = "https://my-website-backend-3yoe.onrender.com";
 
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+export interface TaskFormData {
+  id?: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  status: string;
+  priority: string;
+  category: string;
+  completed: boolean;
+  fileName?: string;
+  isRecurring?: boolean;
+  recurrencePattern?: string;
+  recurrenceEndDate?: string;
+  parentTaskId?: string;
 }
 
-function saveToStorage(tasks: TaskFormData[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-}
+// Get userId from localStorage
+const getUserId = (): string | null => {
+  return localStorage.getItem('userId');
+};
 
-function loadFromStorage(): TaskFormData[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    return JSON.parse(stored);
-  } catch (error) {
-    console.error('Error loading tasks from localStorage:', error);
+// Get all tasks for current user
+export const getTasks = async (): Promise<TaskFormData[]> => {
+  const userId = getUserId();
+  
+  if (!userId) {
+    console.error('User not logged in');
     return [];
   }
-}
 
-export function getTasks(): TaskFormData[] {
-  const tasks = loadFromStorage();
-  ensureRecurringTasksGenerated(tasks);
-  return loadFromStorage();
-}
+  try {
+    const response = await fetch(`${API_URL}/tasks/${userId}`);
+    const data = await response.json();
 
-function ensureRecurringTasksGenerated(tasks: TaskFormData[]): void {
-  const recurringTasks = tasks.filter(t => t.isRecurring && t.id);
-  let tasksToAdd: TaskFormData[] = [];
-  let needsUpdate = false;
-
-  for (const recurringTask of recurringTasks) {
-    if (shouldRegenerateRecurringTasks(tasks, recurringTask)) {
-      const existingGeneratedIds = new Set(
-        tasks.filter(t => t.parentTaskId === recurringTask.id).map(t => t.id)
-      );
-
-      const newTasks = generateRecurringTasks(recurringTask);
-      const uniqueNewTasks = newTasks.filter(t => !existingGeneratedIds.has(t.id));
-
-      if (uniqueNewTasks.length > 0) {
-        tasksToAdd.push(...uniqueNewTasks);
-        needsUpdate = true;
-      }
+    if (data.success && data.tasks) {
+      // Convert database format to frontend format
+      return data.tasks.map((task: any) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description || '',
+        dueDate: task.due_date,
+        status: task.status,
+        priority: task.priority,
+        category: task.category || '',
+        completed: task.completed,
+        fileName: task.file_name,
+        isRecurring: task.is_recurring,
+        recurrencePattern: task.recurrence_pattern,
+        recurrenceEndDate: task.recurrence_end_date,
+        parentTaskId: task.parent_task_id
+      }));
     }
+
+    return [];
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    return [];
   }
+};
 
-  if (needsUpdate && tasksToAdd.length > 0) {
-    const allTasks = [...tasks, ...tasksToAdd];
-    saveToStorage(allTasks);
-  }
-}
-
-export function getTasksByDocumentId(documentId: string): TaskFormData[] {
-  const allTasks = loadFromStorage();
-  return allTasks.filter(task => task.document_id === documentId);
-}
-
-export function addTask(task: Omit<TaskFormData, 'id'>): TaskFormData {
-  const tasks = loadFromStorage();
-  const newTask: TaskFormData = {
-    ...task,
-    id: generateId(),
-    isRecurring: task.recurrenceType ? task.recurrenceType !== 'Нэг удаагийн' : false
-  };
-  tasks.push(newTask);
-
-  if (newTask.isRecurring && newTask.recurrenceType && newTask.recurrenceType !== 'Нэг удаагийн') {
-    const recurringTasks = generateRecurringTasks(newTask);
-    tasks.push(...recurringTasks);
-  }
-
-  saveToStorage(tasks);
-  return newTask;
-}
-
-export function updateTask(id: string, updates: Partial<TaskFormData>): TaskFormData | null {
-  const tasks = loadFromStorage();
-  const index = tasks.findIndex(task => task.id === id);
-
-  if (index === -1) {
-    console.error('Task not found:', id);
-    return null;
-  }
-
-  const originalTask = tasks[index];
-  const wasRecurring = originalTask.isRecurring;
-  const updatedTask = { ...originalTask, ...updates };
-
-  if (updates.recurrenceType) {
-    updatedTask.isRecurring = updates.recurrenceType !== 'Нэг удаагийн';
-  }
-
-  tasks[index] = updatedTask;
-
-  if (wasRecurring && updatedTask.isRecurring &&
-      (updates.recurrenceType || updates.dueDate)) {
-    const filteredTasks = tasks.filter(t => t.parentTaskId !== id);
-    const newRecurringTasks = generateRecurringTasks(updatedTask);
-    const finalTasks = [...filteredTasks, ...newRecurringTasks];
-    saveToStorage(finalTasks);
-  } else if (wasRecurring && !updatedTask.isRecurring) {
-    const filteredTasks = tasks.filter(t => t.parentTaskId !== id);
-    saveToStorage(filteredTasks);
-  } else if (!wasRecurring && updatedTask.isRecurring) {
-    const newRecurringTasks = generateRecurringTasks(updatedTask);
-    const finalTasks = [...tasks, ...newRecurringTasks];
-    saveToStorage(finalTasks);
-  } else {
-    saveToStorage(tasks);
-  }
-
-  return updatedTask;
-}
-
-export function deleteTask(id: string): boolean {
-  const tasks = loadFromStorage();
-  const taskToDelete = tasks.find(task => task.id === id);
-
-  if (!taskToDelete) {
-    console.error('Task not found:', id);
+// Add new task
+export const addTask = async (task: TaskFormData): Promise<boolean> => {
+  const userId = getUserId();
+  
+  if (!userId) {
+    console.error('User not logged in');
     return false;
   }
 
-  let filteredTasks = tasks.filter(task => task.id !== id);
+  const taskId = task.id || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  if (taskToDelete.isRecurring) {
-    filteredTasks = filteredTasks.filter(task => task.parentTaskId !== id);
+  try {
+    const response = await fetch(`${API_URL}/tasks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: taskId,
+        userId: parseInt(userId),
+        title: task.title,
+        description: task.description,
+        dueDate: task.dueDate,
+        status: task.status,
+        priority: task.priority,
+        category: task.category,
+        completed: task.completed,
+        fileName: task.fileName,
+        isRecurring: task.isRecurring,
+        recurrencePattern: task.recurrencePattern,
+        recurrenceEndDate: task.recurrenceEndDate,
+        parentTaskId: task.parentTaskId
+      })
+    });
+
+    const data = await response.json();
+    return data.success;
+  } catch (error) {
+    console.error('Error adding task:', error);
+    return false;
+  }
+};
+
+// Update existing task
+export const updateTask = async (taskId: string, updates: Partial<TaskFormData>): Promise<boolean> => {
+  const userId = getUserId();
+  
+  if (!userId) {
+    console.error('User not logged in');
+    return false;
   }
 
-  saveToStorage(filteredTasks);
-  return true;
-}
+  try {
+    // First get the current task
+    const tasks = await getTasks();
+    const currentTask = tasks.find(t => t.id === taskId);
+    
+    if (!currentTask) {
+      console.error('Task not found');
+      return false;
+    }
+
+    // Merge updates with current task
+    const updatedTask = { ...currentTask, ...updates };
+
+    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: updatedTask.title,
+        description: updatedTask.description,
+        dueDate: updatedTask.dueDate,
+        status: updatedTask.status,
+        priority: updatedTask.priority,
+        category: updatedTask.category,
+        completed: updatedTask.completed,
+        fileName: updatedTask.fileName,
+        isRecurring: updatedTask.isRecurring,
+        recurrencePattern: updatedTask.recurrencePattern,
+        recurrenceEndDate: updatedTask.recurrenceEndDate,
+        parentTaskId: updatedTask.parentTaskId
+      })
+    });
+
+    const data = await response.json();
+    return data.success;
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return false;
+  }
+};
+
+// Delete task
+export const deleteTask = async (taskId: string): Promise<boolean> => {
+  const userId = getUserId();
+  
+  if (!userId) {
+    console.error('User not logged in');
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+    return data.success;
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    return false;
+  }
+};
+
+// Legacy localStorage functions (for backward compatibility during migration)
+// These will be removed once all users have migrated to database
+
+export const migrateLocalStorageToDatabase = async (): Promise<void> => {
+  const userId = getUserId();
+  
+  if (!userId) return;
+
+  try {
+    const localTasks = localStorage.getItem('tasks');
+    
+    if (!localTasks) return;
+
+    const tasks: TaskFormData[] = JSON.parse(localTasks);
+
+    if (tasks.length === 0) return;
+
+    console.log(`Migrating ${tasks.length} tasks to database...`);
+
+    // Upload all tasks to database
+    for (const task of tasks) {
+      await addTask(task);
+    }
+
+    console.log('Migration complete!');
+    
+    // Clear localStorage after successful migration
+    localStorage.removeItem('tasks');
+  } catch (error) {
+    console.error('Migration error:', error);
+  }
+};

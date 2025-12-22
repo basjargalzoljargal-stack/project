@@ -1,4 +1,18 @@
-import { DocumentFormData } from '../components/DocumentModal';
+export interface DocumentFormData {
+  id: string;
+  title: string;
+  number: string;
+  type: string;
+  receivedDate: string;
+  responseRequired: boolean;
+  responseDeadline?: string;
+  priority: string;
+  status: string;
+  assignedTo: string;
+  description: string;
+  fileName?: string;
+  tags: string[];
+}
 
 const STORAGE_KEY = 'documents';
 

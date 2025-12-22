@@ -1,3 +1,5 @@
+// Document Storage - localStorage version
+
 export interface DocumentFormData {
   id: string;
   title: string;

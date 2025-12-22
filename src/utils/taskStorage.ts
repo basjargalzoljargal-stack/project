@@ -1,4 +1,4 @@
-// Task Storage with Backend API Integration
+// Task Storage - Hybrid: localStorage + Database Migration
 
 const API_URL = "https://my-website-backend-3yoe.onrender.com";
 
@@ -23,13 +23,124 @@ const getUserId = (): string | null => {
   return localStorage.getItem('userId');
 };
 
-// Get all tasks for current user
-export const getTasks = async (): Promise<TaskFormData[]> => {
+// Sync functions for backward compatibility
+export const getTasks = (): TaskFormData[] => {
+  const tasksJson = localStorage.getItem('tasks');
+  if (!tasksJson) return [];
+  
+  try {
+    return JSON.parse(tasksJson);
+  } catch (error) {
+    console.error('Error parsing tasks:', error);
+    return [];
+  }
+};
+
+export const addTask = (task: TaskFormData): void => {
+  const tasks = getTasks();
+  const newTask = {
+    ...task,
+    id: task.id || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  };
+  
+  tasks.push(newTask);
+  localStorage.setItem('tasks', JSON.stringify(tasks));
+  
+  // Background sync to database
+  syncTaskToDatabase(newTask, 'create');
+};
+
+export const updateTask = (taskId: string, updates: Partial<TaskFormData>): void => {
+  const tasks = getTasks();
+  const index = tasks.findIndex(t => t.id === taskId);
+  
+  if (index !== -1) {
+    tasks[index] = { ...tasks[index], ...updates };
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+    
+    // Background sync to database
+    syncTaskToDatabase(tasks[index], 'update');
+  }
+};
+
+export const deleteTask = (taskId: string): void => {
+  const tasks = getTasks();
+  const filtered = tasks.filter(t => t.id !== taskId);
+  localStorage.setItem('tasks', JSON.stringify(filtered));
+  
+  // Background sync to database
+  syncTaskToDatabase({ id: taskId } as TaskFormData, 'delete');
+};
+
+// Background sync to database (non-blocking)
+const syncTaskToDatabase = async (task: TaskFormData, action: 'create' | 'update' | 'delete') => {
   const userId = getUserId();
   
   if (!userId) {
-    console.error('User not logged in');
-    return [];
+    console.log('User not logged in, skipping database sync');
+    return;
+  }
+
+  try {
+    if (action === 'create') {
+      await fetch(`${API_URL}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: task.id,
+          userId: parseInt(userId),
+          title: task.title,
+          description: task.description,
+          dueDate: task.dueDate,
+          status: task.status,
+          priority: task.priority,
+          category: task.category,
+          completed: task.completed,
+          fileName: task.fileName,
+          isRecurring: task.isRecurring,
+          recurrencePattern: task.recurrencePattern,
+          recurrenceEndDate: task.recurrenceEndDate,
+          parentTaskId: task.parentTaskId
+        })
+      });
+    } else if (action === 'update') {
+      await fetch(`${API_URL}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: task.title,
+          description: task.description,
+          dueDate: task.dueDate,
+          status: task.status,
+          priority: task.priority,
+          category: task.category,
+          completed: task.completed,
+          fileName: task.fileName,
+          isRecurring: task.isRecurring,
+          recurrencePattern: task.recurrencePattern,
+          recurrenceEndDate: task.recurrenceEndDate,
+          parentTaskId: task.parentTaskId
+        })
+      });
+    } else if (action === 'delete') {
+      await fetch(`${API_URL}/tasks/${task.id}`, {
+        method: 'DELETE'
+      });
+    }
+    
+    console.log(`✅ Task ${action}d to database:`, task.id);
+  } catch (error) {
+    console.error(`❌ Database sync failed (${action}):`, error);
+  }
+};
+
+// Load tasks from database on login
+export const loadTasksFromDatabase = async (): Promise<TaskFormData[]> => {
+  const userId = getUserId();
+  
+  if (!userId) {
+    console.log('User not logged in');
+    return getTasks(); // Return localStorage tasks
   }
 
   try {
@@ -37,8 +148,7 @@ export const getTasks = async (): Promise<TaskFormData[]> => {
     const data = await response.json();
 
     if (data.success && data.tasks) {
-      // Convert database format to frontend format
-      return data.tasks.map((task: any) => ({
+      const dbTasks = data.tasks.map((task: any) => ({
         id: task.id,
         title: task.title,
         description: task.description || '',
@@ -53,160 +163,69 @@ export const getTasks = async (): Promise<TaskFormData[]> => {
         recurrenceEndDate: task.recurrence_end_date,
         parentTaskId: task.parent_task_id
       }));
+      
+      // Merge with localStorage
+      const localTasks = getTasks();
+      const merged = mergeTasks(localTasks, dbTasks);
+      
+      // Save merged to localStorage
+      localStorage.setItem('tasks', JSON.stringify(merged));
+      
+      return merged;
     }
 
-    return [];
+    return getTasks();
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    return [];
+    console.error('Error loading from database:', error);
+    return getTasks(); // Fallback to localStorage
   }
 };
 
-// Add new task
-export const addTask = async (task: TaskFormData): Promise<boolean> => {
+// Merge localStorage and database tasks (database takes precedence)
+const mergeTasks = (localTasks: TaskFormData[], dbTasks: TaskFormData[]): TaskFormData[] => {
+  const dbIds = new Set(dbTasks.map(t => t.id));
+  const localOnly = localTasks.filter(t => !dbIds.has(t.id));
+  
+  // Upload local-only tasks to database
+  localOnly.forEach(task => {
+    syncTaskToDatabase(task, 'create');
+  });
+  
+  return [...dbTasks, ...localOnly];
+};
+
+// One-time migration: Upload all localStorage tasks to database
+export const migrateToDatabase = async (): Promise<void> => {
   const userId = getUserId();
   
   if (!userId) {
-    console.error('User not logged in');
-    return false;
+    console.log('User not logged in, cannot migrate');
+    return;
   }
 
-  const taskId = task.id || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  try {
-    const response = await fetch(`${API_URL}/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        id: taskId,
-        userId: parseInt(userId),
-        title: task.title,
-        description: task.description,
-        dueDate: task.dueDate,
-        status: task.status,
-        priority: task.priority,
-        category: task.category,
-        completed: task.completed,
-        fileName: task.fileName,
-        isRecurring: task.isRecurring,
-        recurrencePattern: task.recurrencePattern,
-        recurrenceEndDate: task.recurrenceEndDate,
-        parentTaskId: task.parentTaskId
-      })
-    });
-
-    const data = await response.json();
-    return data.success;
-  } catch (error) {
-    console.error('Error adding task:', error);
-    return false;
+  const migrated = localStorage.getItem('tasks_migrated');
+  if (migrated === 'true') {
+    console.log('Tasks already migrated');
+    return;
   }
-};
 
-// Update existing task
-export const updateTask = async (taskId: string, updates: Partial<TaskFormData>): Promise<boolean> => {
-  const userId = getUserId();
+  const localTasks = getTasks();
   
-  if (!userId) {
-    console.error('User not logged in');
-    return false;
+  if (localTasks.length === 0) {
+    localStorage.setItem('tasks_migrated', 'true');
+    return;
   }
 
+  console.log(`🔄 Migrating ${localTasks.length} tasks to database...`);
+
   try {
-    // First get the current task
-    const tasks = await getTasks();
-    const currentTask = tasks.find(t => t.id === taskId);
-    
-    if (!currentTask) {
-      console.error('Task not found');
-      return false;
+    for (const task of localTasks) {
+      await syncTaskToDatabase(task, 'create');
     }
-
-    // Merge updates with current task
-    const updatedTask = { ...currentTask, ...updates };
-
-    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: updatedTask.title,
-        description: updatedTask.description,
-        dueDate: updatedTask.dueDate,
-        status: updatedTask.status,
-        priority: updatedTask.priority,
-        category: updatedTask.category,
-        completed: updatedTask.completed,
-        fileName: updatedTask.fileName,
-        isRecurring: updatedTask.isRecurring,
-        recurrencePattern: updatedTask.recurrencePattern,
-        recurrenceEndDate: updatedTask.recurrenceEndDate,
-        parentTaskId: updatedTask.parentTaskId
-      })
-    });
-
-    const data = await response.json();
-    return data.success;
-  } catch (error) {
-    console.error('Error updating task:', error);
-    return false;
-  }
-};
-
-// Delete task
-export const deleteTask = async (taskId: string): Promise<boolean> => {
-  const userId = getUserId();
-  
-  if (!userId) {
-    console.error('User not logged in');
-    return false;
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/tasks/${taskId}`, {
-      method: 'DELETE'
-    });
-
-    const data = await response.json();
-    return data.success;
-  } catch (error) {
-    console.error('Error deleting task:', error);
-    return false;
-  }
-};
-
-// Legacy localStorage functions (for backward compatibility during migration)
-// These will be removed once all users have migrated to database
-
-export const migrateLocalStorageToDatabase = async (): Promise<void> => {
-  const userId = getUserId();
-  
-  if (!userId) return;
-
-  try {
-    const localTasks = localStorage.getItem('tasks');
     
-    if (!localTasks) return;
-
-    const tasks: TaskFormData[] = JSON.parse(localTasks);
-
-    if (tasks.length === 0) return;
-
-    console.log(`Migrating ${tasks.length} tasks to database...`);
-
-    // Upload all tasks to database
-    for (const task of tasks) {
-      await addTask(task);
-    }
-
-    console.log('Migration complete!');
-    
-    // Clear localStorage after successful migration
-    localStorage.removeItem('tasks');
+    localStorage.setItem('tasks_migrated', 'true');
+    console.log('✅ Migration complete!');
   } catch (error) {
-    console.error('Migration error:', error);
+    console.error('❌ Migration failed:', error);
   }
 };

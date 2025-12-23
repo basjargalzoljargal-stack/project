@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, FileText } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle } from 'lucide-react';
 
 export interface DocumentFormData {
   id?: string;
@@ -14,12 +14,16 @@ export interface DocumentFormData {
   file_url?: string;
   file_name?: string;
   file_type?: string;
+  report_file_url?: string;
+  report_file_name?: string;
+  report_file_type?: string;
+  completed_at?: string;
 }
 
 interface DocumentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (document: DocumentFormData, file?: File) => void;
+  onSave: (document: DocumentFormData, file?: File, reportFile?: File) => void;
   document?: DocumentFormData | null;
 }
 
@@ -33,12 +37,14 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
     status: 'Pending',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedReportFile, setSelectedReportFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (document) {
       setFormData(document);
       setSelectedFile(null);
+      setSelectedReportFile(null);
     } else {
       setFormData({
         received_date: new Date().toISOString().split('T')[0],
@@ -49,6 +55,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
         status: 'Pending',
       });
       setSelectedFile(null);
+      setSelectedReportFile(null);
     }
   }, [document, isOpen]);
 
@@ -77,6 +84,42 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
     }
   };
 
+  const handleReportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        alert('PDF, DOC, DOCX, PNG, JPG файл хавсаргана уу');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Файлын хэмжээ 10MB-аас бага байх ёстой');
+        return;
+      }
+
+      setSelectedReportFile(file);
+    }
+  };
+
+  const handleStatusChange = (newStatus: DocumentFormData['status']) => {
+    const updates: Partial<DocumentFormData> = { status: newStatus };
+    
+    // If marking as completed, add timestamp
+    if (newStatus === 'Completed' && formData.status !== 'Completed') {
+      updates.completed_at = new Date().toISOString();
+    }
+    
+    setFormData({ ...formData, ...updates });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -90,9 +133,15 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
       return;
     }
 
+    // Require report file when completing document
+    if (formData.status === 'Completed' && !selectedReportFile && !formData.report_file_url) {
+      alert('Дууссан албан бичигт биелэлтийн тайлан хавсаргана уу');
+      return;
+    }
+
     setUploading(true);
     try {
-      onSave(formData, selectedFile || undefined);
+      onSave(formData, selectedFile || undefined, selectedReportFile || undefined);
       onClose();
     } finally {
       setUploading(false);
@@ -202,7 +251,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
               </label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentFormData['status'] })}
+                onChange={(e) => handleStatusChange(e.target.value as DocumentFormData['status'])}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
                 <option value="Pending">Хүлээгдэж буй</option>
@@ -244,7 +293,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Файл хавсаргах
+              Анхны албан бичиг хавсаргах
             </label>
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-slate-400 transition-colors">
               <input
@@ -282,6 +331,56 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
               </label>
             </div>
           </div>
+
+          {/* Report Upload Section - Only show when status is Completed */}
+          {formData.status === 'Completed' && (
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <label className="block text-sm font-medium text-green-900">
+                  Биелэлтийн тайлан *
+                </label>
+              </div>
+              <div className="border-2 border-dashed border-green-300 rounded-lg p-6 hover:border-green-400 transition-colors bg-white">
+                <input
+                  type="file"
+                  id="report-file-upload"
+                  onChange={handleReportFileChange}
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  className="hidden"
+                />
+                <label
+                  htmlFor="report-file-upload"
+                  className="flex flex-col items-center justify-center cursor-pointer"
+                >
+                  {selectedReportFile ? (
+                    <>
+                      <FileText className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{selectedReportFile.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {(selectedReportFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </>
+                  ) : formData.report_file_name ? (
+                    <>
+                      <FileText className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{formData.report_file_name}</p>
+                      <p className="text-xs text-slate-500 mt-1">Одоогийн тайлан</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-green-900 font-medium">Биелэлтийн тайлан хавсаргах</p>
+                      <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG (хамгийн ихдээ 10MB)</p>
+                    </>
+                  )}
+                </label>
+              </div>
+              <p className="text-xs text-green-700 mt-2">
+                * Дууссан албан бичигт биелэлтийн тайлан заавал хавсаргана уу
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

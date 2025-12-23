@@ -45,7 +45,7 @@ export default function DocumentsPage({ tasks }: DocumentsPageProps) {
     setLoading(false);
   };
 
-  const handleSaveDocument = (formData: DocumentFormData, file?: File) => {
+  const handleSaveDocument = (formData: DocumentFormData, file?: File, reportFile?: File) => {
     try {
       let file_url = formData.file_url;
       let file_name = formData.file_name;
@@ -57,11 +57,24 @@ export default function DocumentsPage({ tasks }: DocumentsPageProps) {
         file_type = file.type;
       }
 
+      let report_file_url = formData.report_file_url;
+      let report_file_name = formData.report_file_name;
+      let report_file_type = formData.report_file_type;
+
+      if (reportFile) {
+        report_file_url = URL.createObjectURL(reportFile);
+        report_file_name = reportFile.name;
+        report_file_type = reportFile.type;
+      }
+
       const documentData = {
         ...formData,
         file_url,
         file_name,
-        file_type
+        file_type,
+        report_file_url,
+        report_file_name,
+        report_file_type
       };
 
       let savedDocumentId = formData.id;

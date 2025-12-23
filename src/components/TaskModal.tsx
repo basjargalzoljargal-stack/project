@@ -1,4 +1,4 @@
-import { X, Upload, FileIcon } from 'lucide-react';
+import { X, Upload, FileIcon, CheckCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export type RecurrenceType = 'Нэг удаагийн' | '7 хоног бүр' | 'Сар бүр' | 'Улирал бүр' | 'Жил бүр';
@@ -23,12 +23,16 @@ export interface TaskFormData {
     dayOfMonth?: number;
     month?: number;
   };
+  report_file_name?: string;
+  report_file_url?: string;
+  report_file_type?: string;
+  completed_at?: string;
 }
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (task: TaskFormData) => void;
+  onSave: (task: TaskFormData, reportFile?: File) => void;
   task?: TaskFormData | null;
 }
 
@@ -45,6 +49,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
   });
 
   const [fileName, setFileName] = useState<string>('');
+  const [selectedReportFile, setSelectedReportFile] = useState<File | null>(null);
   const [date, setDate] = useState<string>('');
   const [time, setTime] = useState<string>('');
 
@@ -52,6 +57,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
     if (task) {
       setFormData(task);
       setFileName(task.fileName || '');
+      setSelectedReportFile(null);
 
       if (task.dueDate) {
         const dt = new Date(task.dueDate);
@@ -72,10 +78,51 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
         recurrenceType: 'Нэг удаагийн',
       });
       setFileName('');
+      setSelectedReportFile(null);
       setDate('');
       setTime('');
     }
   }, [task, isOpen]);
+
+  const handleStatusChange = (newStatus: TaskFormData['status']) => {
+    const updates: Partial<TaskFormData> = { 
+      status: newStatus,
+      completed: newStatus === 'Дууссан' || newStatus === 'Completed'
+    };
+    
+    // If marking as completed, add timestamp
+    if ((newStatus === 'Дууссан' || newStatus === 'Completed') && 
+        (formData.status !== 'Дууссан' && formData.status !== 'Completed')) {
+      updates.completed_at = new Date().toISOString();
+    }
+    
+    setFormData({ ...formData, ...updates });
+  };
+
+  const handleReportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        alert('PDF, DOC, DOCX, PNG, JPG файл хавсаргана уу');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Файлын хэмжээ 10MB-аас бага байх ёстой');
+        return;
+      }
+
+      setSelectedReportFile(file);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,12 +130,20 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
     const timeToUse = time || '09:00';
     const dueDate = `${date}T${timeToUse}`;
 
+    // Require report file when completing task
+    if ((formData.status === 'Дууссан' || formData.status === 'Completed') && 
+        !selectedReportFile && !formData.report_file_url) {
+      alert('Дууссан төлөвлөгөөнд биелэлтийн тайлан хавсаргана уу');
+      return;
+    }
+
     onSave({
       ...formData,
       dueDate,
       createdAt: formData.createdAt || new Date().toISOString(),
       fileName: fileName || undefined
-    });
+    }, selectedReportFile || undefined);
+    
     onClose();
   };
 
@@ -100,6 +155,8 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
   };
 
   if (!isOpen) return null;
+
+  const isCompleted = formData.status === 'Дууссан' || formData.status === 'Completed';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -244,7 +301,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
               <select
                 id="status"
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as TaskFormData['status'] })}
+                onChange={(e) => handleStatusChange(e.target.value as TaskFormData['status'])}
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                 required
               >
@@ -284,6 +341,56 @@ export default function TaskModal({ isOpen, onClose, onSave, task }: TaskModalPr
               )}
             </div>
           </div>
+
+          {/* Report Upload Section - Only show when status is Completed */}
+          {isCompleted && (
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <label className="block text-sm font-medium text-green-900">
+                  Биелэлтийн тайлан *
+                </label>
+              </div>
+              <div className="border-2 border-dashed border-green-300 rounded-lg p-6 hover:border-green-400 transition-colors bg-white">
+                <input
+                  type="file"
+                  id="report-file-upload"
+                  onChange={handleReportFileChange}
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  className="hidden"
+                />
+                <label
+                  htmlFor="report-file-upload"
+                  className="flex flex-col items-center justify-center cursor-pointer"
+                >
+                  {selectedReportFile ? (
+                    <>
+                      <FileIcon className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{selectedReportFile.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {(selectedReportFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </>
+                  ) : formData.report_file_name ? (
+                    <>
+                      <FileIcon className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{formData.report_file_name}</p>
+                      <p className="text-xs text-slate-500 mt-1">Одоогийн тайлан</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 text-green-600 mb-2" />
+                      <p className="text-sm text-green-900 font-medium">Биелэлтийн тайлан хавсаргах</p>
+                      <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG (хамгийн ихдээ 10MB)</p>
+                    </>
+                  )}
+                </label>
+              </div>
+              <p className="text-xs text-green-700 mt-2">
+                * Дууссан төлөвлөгөөнд биелэлтийн тайлан заавал хавсаргана уу
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

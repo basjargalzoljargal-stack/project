@@ -5,6 +5,7 @@ interface AuthContextType {
   userRole: string | null;
   loading: boolean;
   signIn: (username: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => void;
 }
 
@@ -42,7 +43,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: data.message || "Login failed" };
       }
 
-      // ✅ ШИНЭ: Role хадгалах
       localStorage.setItem("isLoggedIn", "true");
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("userRole", data.role || "user");
@@ -50,6 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       setIsLoggedIn(true);
       setUserRole(data.role || "user");
+
+      return { error: null };
+    } catch (err) {
+      return { error: "Backend холбогдсонгүй" };
+    }
+  };
+
+  const signUp = async (username: string, password: string) => {
+    try {
+      const res = await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { error: data.message || "Бүртгэл амжилтгүй" };
+      }
 
       return { error: null };
     } catch (err) {
@@ -67,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, userRole, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ isLoggedIn, userRole, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

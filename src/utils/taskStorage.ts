@@ -1,4 +1,4 @@
-// Task Storage with Recurring Tasks Support
+// Task Storage with Fixed Recurring Tasks Support
 
 export type RecurrenceType = 'Нэг удаагийн' | '7 хоног бүр' | 'Сар бүр' | 'Улирал бүр' | 'Жил бүр';
 
@@ -47,6 +47,11 @@ export const addTask = (task: TaskFormData): void => {
   
   tasks.push(newTask);
   localStorage.setItem('tasks', JSON.stringify(tasks));
+  
+  // If it's a new recurring task, generate future instances
+  if (newTask.isRecurring && !newTask.parentTaskId && task.recurrenceType !== 'Нэг удаагийн') {
+    generateFutureRecurringTasks(newTask);
+  }
 };
 
 export const updateTask = (taskId: string, updates: Partial<TaskFormData>): void => {
@@ -95,11 +100,67 @@ function calculateNextDueDate(currentDate: Date, recurrenceType: RecurrenceType)
   return nextDate;
 }
 
-// Check and create recurring tasks
+// Generate future recurring tasks (up to 1 year ahead)
+function generateFutureRecurringTasks(originalTask: TaskFormData): void {
+  if (!originalTask.recurrenceType || originalTask.recurrenceType === 'Нэг удаагийн') {
+    return;
+  }
+  
+  const tasks = getTasks();
+  const newTasks: TaskFormData[] = [];
+  const today = new Date();
+  const oneYearFromNow = new Date(today);
+  oneYearFromNow.setFullYear(today.getFullYear() + 1);
+  
+  let currentDate = new Date(originalTask.dueDate);
+  
+  // Generate tasks up to 1 year in advance
+  while (currentDate < oneYearFromNow) {
+    currentDate = calculateNextDueDate(currentDate, originalTask.recurrenceType);
+    
+    if (currentDate >= oneYearFromNow) break;
+    
+    // Check if task already exists for this date
+    const existingTask = tasks.find(t => {
+      if (t.parentTaskId !== originalTask.id) return false;
+      const tDate = new Date(t.dueDate);
+      tDate.setHours(0, 0, 0, 0);
+      const checkDate = new Date(currentDate);
+      checkDate.setHours(0, 0, 0, 0);
+      return tDate.getTime() === checkDate.getTime();
+    });
+    
+    if (!existingTask) {
+      const newTask: TaskFormData = {
+        ...originalTask,
+        id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${newTasks.length}`,
+        dueDate: currentDate.toISOString(),
+        parentTaskId: originalTask.id,
+        completed: false,
+        status: 'Төлөвлөсөн',
+        createdAt: new Date().toISOString()
+      };
+      
+      newTasks.push(newTask);
+    }
+  }
+  
+  // Add all new tasks
+  if (newTasks.length > 0) {
+    const allTasks = [...tasks, ...newTasks];
+    localStorage.setItem('tasks', JSON.stringify(allTasks));
+    console.log(`✅ Generated ${newTasks.length} future recurring tasks for 1 year`);
+  }
+}
+
+// Check and create recurring tasks (called on dashboard load)
 export const checkAndCreateRecurringTasks = (): void => {
   const tasks = getTasks();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  
+  const oneYearFromNow = new Date(today);
+  oneYearFromNow.setFullYear(today.getFullYear() + 1);
   
   const newTasks: TaskFormData[] = [];
   
@@ -109,43 +170,49 @@ export const checkAndCreateRecurringTasks = (): void => {
       return;
     }
     
-    const taskDueDate = new Date(task.dueDate);
-    taskDueDate.setHours(0, 0, 0, 0);
+    // Get all child tasks of this recurring task
+    const childTasks = tasks.filter(t => t.parentTaskId === task.id);
     
-    // Check if the task due date has passed
-    if (taskDueDate >= today) {
-      return; // Task not yet due
-    }
-    
-    // Calculate the next due date
-    let nextDueDate = new Date(taskDueDate);
-    
-    // Keep calculating until we find a future date
-    while (nextDueDate < today) {
-      nextDueDate = calculateNextDueDate(nextDueDate, task.recurrenceType!);
-    }
-    
-    // Check if a task already exists for this date
-    const existingTask = tasks.find(t => {
-      if (t.parentTaskId !== task.id) return false;
-      const tDate = new Date(t.dueDate);
-      tDate.setHours(0, 0, 0, 0);
-      return tDate.getTime() === nextDueDate.getTime();
+    // Find the latest child task date
+    let latestDate = new Date(task.dueDate);
+    childTasks.forEach(child => {
+      const childDate = new Date(child.dueDate);
+      if (childDate > latestDate) {
+        latestDate = childDate;
+      }
     });
     
-    if (!existingTask) {
-      // Create new recurring task
-      const newTask: TaskFormData = {
-        ...task,
-        id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        dueDate: nextDueDate.toISOString(),
-        parentTaskId: task.id,
-        completed: false,
-        status: 'Төлөвлөсөн',
-        createdAt: new Date().toISOString()
-      };
+    // Generate tasks from latest date up to 1 year from now
+    let currentDate = new Date(latestDate);
+    
+    while (currentDate < oneYearFromNow) {
+      currentDate = calculateNextDueDate(currentDate, task.recurrenceType!);
       
-      newTasks.push(newTask);
+      if (currentDate >= oneYearFromNow) break;
+      
+      // Check if task already exists for this date
+      const existingTask = tasks.find(t => {
+        if (t.parentTaskId !== task.id && t.id !== task.id) return false;
+        const tDate = new Date(t.dueDate);
+        tDate.setHours(0, 0, 0, 0);
+        const checkDate = new Date(currentDate);
+        checkDate.setHours(0, 0, 0, 0);
+        return tDate.getTime() === checkDate.getTime();
+      });
+      
+      if (!existingTask) {
+        const newTask: TaskFormData = {
+          ...task,
+          id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${newTasks.length}`,
+          dueDate: currentDate.toISOString(),
+          parentTaskId: task.id,
+          completed: false,
+          status: 'Төлөвлөсөн',
+          createdAt: new Date().toISOString()
+        };
+        
+        newTasks.push(newTask);
+      }
     }
   });
   

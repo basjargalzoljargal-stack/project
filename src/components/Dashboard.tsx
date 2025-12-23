@@ -8,7 +8,7 @@ import AdminPage from './AdminPage';
 import TaskModal, { TaskFormData } from './TaskModal';
 import TaskExportMenu from './TaskExportMenu';
 import TaskCharts from './TaskCharts';
-import { getTasks, addTask, updateTask, deleteTask } from '../utils/taskStorage';
+import { getTasks, addTask, updateTask, deleteTask, checkAndCreateRecurringTasks } from '../utils/taskStorage';
 import { useAuth } from '../contexts/AuthContext';
 
 interface DashboardProps {
@@ -34,9 +34,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     stats: { total: number; completed: number; overdue: number; pending: number };
   } | null>(null);
 
- const loadTasks = async () => {
+ const loadTasks = () => {
   setLoading(true);
-  const loadedTasks = await getTasks();
+  
+  // Check and create recurring tasks
+  checkAndCreateRecurringTasks();
+  
+  const loadedTasks = getTasks();
   setTasks(loadedTasks);
   setLoading(false);
 };

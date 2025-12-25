@@ -64,6 +64,26 @@ export default function DocumentDetailModal({
     }
   };
 
+  // ✅ ШИНЭ: Report download функц
+  const handleDownloadReport = () => {
+    if (!document.report_file_url || !document.report_file_name) {
+      alert('Тайлан файл олдсонгүй');
+      return;
+    }
+
+    try {
+      const link = document.createElement('a');
+      link.href = document.report_file_url;
+      link.download = document.report_file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Тайлан татахад алдаа гарлаа');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -196,6 +216,30 @@ export default function DocumentDetailModal({
                 <button
                   onClick={handleDownload}
                   className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Татах
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ ШИНЭ: Report file section */}
+          {document.status === 'Completed' && document.report_file_url && document.report_file_name && (
+            <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <FileText className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-green-900">Хариу/Тайлан</p>
+                    <p className="text-xs text-green-700">{document.report_file_name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDownloadReport}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Татах

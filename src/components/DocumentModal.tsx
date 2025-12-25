@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, FileText, CheckCircle } from 'lucide-react';
+import { X, Upload, FileText } from 'lucide-react';
 
 export interface DocumentFormData {
   id?: string;
@@ -14,10 +14,10 @@ export interface DocumentFormData {
   file_url?: string;
   file_name?: string;
   file_type?: string;
+  // ✅ Report/Response fields
   report_file_url?: string;
   report_file_name?: string;
   report_file_type?: string;
-  completed_at?: string;
 }
 
 interface DocumentModalProps {
@@ -109,17 +109,6 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
     }
   };
 
-  const handleStatusChange = (newStatus: DocumentFormData['status']) => {
-    const updates: Partial<DocumentFormData> = { status: newStatus };
-    
-    // If marking as completed, add timestamp
-    if (newStatus === 'Completed' && formData.status !== 'Completed') {
-      updates.completed_at = new Date().toISOString();
-    }
-    
-    setFormData({ ...formData, ...updates });
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -130,12 +119,6 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
 
     if (formData.category === 'Response required' && !formData.deadline) {
       alert('Хариу шаардлагатай албан бичигт хугацаа тогтооно уу');
-      return;
-    }
-
-    // Require report file when completing document
-    if (formData.status === 'Completed' && !selectedReportFile && !formData.report_file_url) {
-      alert('Дууссан албан бичигт биелэлтийн тайлан хавсаргана уу');
       return;
     }
 
@@ -251,7 +234,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
               </label>
               <select
                 value={formData.status}
-                onChange={(e) => handleStatusChange(e.target.value as DocumentFormData['status'])}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentFormData['status'] })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
                 <option value="Pending">Хүлээгдэж буй</option>
@@ -293,7 +276,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Анхны албан бичиг хавсаргах
+              Файл хавсаргах
             </label>
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-slate-400 transition-colors">
               <input
@@ -332,16 +315,13 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
             </div>
           </div>
 
-          {/* Report Upload Section - Only show when status is Completed */}
+          {/* ✅ ШИНЭ: Report/Response Upload - ЗӨВХӨН status="Completed" үед харагдана */}
           {formData.status === 'Completed' && (
             <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <label className="block text-sm font-medium text-green-900">
-                  Биелэлтийн тайлан *
-                </label>
-              </div>
-              <div className="border-2 border-dashed border-green-300 rounded-lg p-6 hover:border-green-400 transition-colors bg-white">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                📄 Хариу/Тайлан хавсаргах (заавал биш)
+              </label>
+              <div className="border-2 border-dashed border-green-300 rounded-lg p-6 hover:border-green-400 transition-colors">
                 <input
                   type="file"
                   id="report-file-upload"
@@ -355,7 +335,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
                 >
                   {selectedReportFile ? (
                     <>
-                      <FileText className="w-12 h-12 text-green-600 mb-2" />
+                      <FileText className="w-10 h-10 text-green-600 mb-2" />
                       <p className="text-sm text-slate-700 font-medium">{selectedReportFile.name}</p>
                       <p className="text-xs text-slate-500 mt-1">
                         {(selectedReportFile.size / 1024 / 1024).toFixed(2)} MB
@@ -363,21 +343,21 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
                     </>
                   ) : formData.report_file_name ? (
                     <>
-                      <FileText className="w-12 h-12 text-green-600 mb-2" />
+                      <FileText className="w-10 h-10 text-green-600 mb-2" />
                       <p className="text-sm text-slate-700 font-medium">{formData.report_file_name}</p>
-                      <p className="text-xs text-slate-500 mt-1">Одоогийн тайлан</p>
+                      <p className="text-xs text-green-600 mt-1">Одоогийн тайлан</p>
                     </>
                   ) : (
                     <>
-                      <Upload className="w-12 h-12 text-green-600 mb-2" />
-                      <p className="text-sm text-green-900 font-medium">Биелэлтийн тайлан хавсаргах</p>
-                      <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG (хамгийн ихдээ 10MB)</p>
+                      <Upload className="w-10 h-10 text-green-400 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">Тайлан хавсаргах</p>
+                      <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG</p>
                     </>
                   )}
                 </label>
               </div>
-              <p className="text-xs text-green-700 mt-2">
-                * Дууссан албан бичигт биелэлтийн тайлан заавал хавсаргана уу
+              <p className="text-xs text-slate-600 mt-2">
+                💡 Энэ албан бичигт хариу өгсөн эсвэл тайлан бичсэн бол энд хавсаргаж болно
               </p>
             </div>
           )}

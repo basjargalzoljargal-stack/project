@@ -43,10 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: data.message || "Login failed" };
       }
 
+      // ✅ ЗАСВАРЛАСАН: user object хадгалах
+      const user = {
+        id: data.userId,
+        username: data.username,
+        role: data.role || "user"
+      };
+
       localStorage.setItem("isLoggedIn", "true");
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("userRole", data.role || "user");
       localStorage.setItem("username", data.username);
+      localStorage.setItem("user", JSON.stringify(user)); // ✅ НЭМСЭН
       
       setIsLoggedIn(true);
       setUserRole(data.role || "user");
@@ -84,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("userId");
     localStorage.removeItem("userRole");
     localStorage.removeItem("username");
+    localStorage.removeItem("user"); // ✅ НЭМСЭН
     setIsLoggedIn(false);
     setUserRole(null);
   };

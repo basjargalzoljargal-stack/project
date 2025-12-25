@@ -1,9 +1,10 @@
-// Task Storage with Recurring Tasks Support
+// Task Storage with Recurring Tasks Support + User Filtering
 
 export type RecurrenceType = 'Нэг удаагийн' | '7 хоног бүр' | 'Сар бүр' | 'Улирал бүр' | 'Жил бүр';
 
 export interface TaskFormData {
   id?: string;
+  userId?: string; // ✅ НЭМСЭН: User ID
   title: string;
   description: string;
   dueDate: string;
@@ -24,7 +25,44 @@ export interface TaskFormData {
   createdAt?: string;
 }
 
+// ✅ ШИНЭ: Get current user ID from localStorage
+const getCurrentUserId = (): string | null => {
+  const userJson = localStorage.getItem('user');
+  if (!userJson) return null;
+  
+  try {
+    const user = JSON.parse(userJson);
+    return user.id?.toString() || null;
+  } catch (error) {
+    console.error('Error parsing user:', error);
+    return null;
+  }
+};
+
+// ✅ ЗАСВАРЛАСАН: Get tasks for current user only
 export const getTasks = (): TaskFormData[] => {
+  const tasksJson = localStorage.getItem('tasks');
+  if (!tasksJson) return [];
+  
+  try {
+    const allTasks = JSON.parse(tasksJson);
+    const currentUserId = getCurrentUserId();
+    
+    if (!currentUserId) {
+      console.warn('No user logged in');
+      return [];
+    }
+    
+    // ✅ Filter tasks by userId
+    return allTasks.filter((task: TaskFormData) => task.userId === currentUserId);
+  } catch (error) {
+    console.error('Error parsing tasks:', error);
+    return [];
+  }
+};
+
+// ✅ ШИНЭ: Get ALL tasks (for internal use only)
+const getAllTasks = (): TaskFormData[] => {
   const tasksJson = localStorage.getItem('tasks');
   if (!tasksJson) return [];
   
@@ -36,37 +74,62 @@ export const getTasks = (): TaskFormData[] => {
   }
 };
 
-export const addTask = (task: TaskFormData): void => {
-  const tasks = getTasks();
+// ✅ ЗАСВАРЛАСАН: Add task with userId
+export const addTask = (task: TaskFormData): TaskFormData => {
+  const allTasks = getAllTasks();
+  const currentUserId = getCurrentUserId();
+  
+  if (!currentUserId) {
+    throw new Error('No user logged in');
+  }
+  
   const newTask = {
     ...task,
     id: task.id || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    userId: currentUserId, // ✅ Add userId
     isRecurring: task.recurrenceType !== 'Нэг удаагийн',
     parentTaskId: task.parentTaskId || undefined
   };
   
-  tasks.push(newTask);
-  localStorage.setItem('tasks', JSON.stringify(tasks));
+  allTasks.push(newTask);
+  localStorage.setItem('tasks', JSON.stringify(allTasks));
+  
+  return newTask;
 };
 
+// ✅ ЗАСВАРЛАСАН: Update task (check userId)
 export const updateTask = (taskId: string, updates: Partial<TaskFormData>): void => {
-  const tasks = getTasks();
-  const index = tasks.findIndex(t => t.id === taskId);
+  const allTasks = getAllTasks();
+  const currentUserId = getCurrentUserId();
+  
+  if (!currentUserId) {
+    throw new Error('No user logged in');
+  }
+  
+  const index = allTasks.findIndex(t => t.id === taskId && t.userId === currentUserId);
   
   if (index !== -1) {
-    tasks[index] = { ...tasks[index], ...updates };
-    localStorage.setItem('tasks', JSON.stringify(tasks));
+    allTasks[index] = { ...allTasks[index], ...updates };
+    localStorage.setItem('tasks', JSON.stringify(allTasks));
   }
 };
 
+// ✅ ЗАСВАРЛАСАН: Delete task (check userId)
 export const deleteTask = (taskId: string): void => {
-  const tasks = getTasks();
-  const filtered = tasks.filter(t => t.id !== taskId);
+  const allTasks = getAllTasks();
+  const currentUserId = getCurrentUserId();
+  
+  if (!currentUserId) {
+    throw new Error('No user logged in');
+  }
+  
+  const filtered = allTasks.filter(t => !(t.id === taskId && t.userId === currentUserId));
   localStorage.setItem('tasks', JSON.stringify(filtered));
 };
 
+// ✅ ЗАСВАРЛАСАН: Get tasks by document ID (filter by userId)
 export const getTasksByDocumentId = (documentId: string): TaskFormData[] => {
-  const tasks = getTasks();
+  const tasks = getTasks(); // Already filtered by userId
   return tasks.filter(task => task.document_id === documentId);
 };
 
@@ -95,9 +158,16 @@ function calculateNextDueDate(currentDate: Date, recurrenceType: RecurrenceType)
   return nextDate;
 }
 
-// Check and create recurring tasks
+// ✅ ЗАСВАРЛАСАН: Check and create recurring tasks (for current user)
 export const checkAndCreateRecurringTasks = (): void => {
-  const tasks = getTasks();
+  const tasks = getTasks(); // Already filtered by userId
+  const currentUserId = getCurrentUserId();
+  
+  if (!currentUserId) {
+    console.warn('No user logged in');
+    return;
+  }
+  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
@@ -138,6 +208,7 @@ export const checkAndCreateRecurringTasks = (): void => {
       const newTask: TaskFormData = {
         ...task,
         id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: currentUserId, // ✅ Add userId
         dueDate: nextDueDate.toISOString(),
         parentTaskId: task.id,
         completed: false,
@@ -151,15 +222,16 @@ export const checkAndCreateRecurringTasks = (): void => {
   
   // Add all new tasks
   if (newTasks.length > 0) {
-    const allTasks = [...tasks, ...newTasks];
-    localStorage.setItem('tasks', JSON.stringify(allTasks));
+    const allTasks = getAllTasks();
+    const updatedTasks = [...allTasks, ...newTasks];
+    localStorage.setItem('tasks', JSON.stringify(updatedTasks));
     console.log(`✅ Created ${newTasks.length} recurring tasks`);
   }
 };
 
-// Get all child tasks of a recurring task
+// ✅ ЗАСВАРЛАСАН: Get all child tasks of a recurring task (filter by userId)
 export const getChildTasks = (parentTaskId: string): TaskFormData[] => {
-  const tasks = getTasks();
+  const tasks = getTasks(); // Already filtered by userId
   return tasks.filter(task => task.parentTaskId === parentTaskId);
 };
 

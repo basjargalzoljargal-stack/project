@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Edit2, Trash2, AlertCircle, FileText } from 'lucide-react';
+import { Plus, Search, Eye, Edit2, Trash2, AlertCircle, FileText, Download } from 'lucide-react';
 import DocumentModal, { DocumentFormData } from './DocumentModal';
 import DocumentDetailModal from './DocumentDetailModal';
 import DocumentExportMenu from './DocumentExportMenu';
@@ -10,6 +10,16 @@ import { getDocuments, addDocument, updateDocument, deleteDocument } from '../ut
 interface DocumentsPageProps {
   tasks: TaskFormData[];
 }
+
+// Helper function to convert file to base64
+const convertFileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function DocumentsPage({ tasks }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<DocumentFormData[]>([]);
@@ -45,23 +55,52 @@ export default function DocumentsPage({ tasks }: DocumentsPageProps) {
     setLoading(false);
   };
 
-  const handleSaveDocument = (formData: DocumentFormData, file?: File) => {
+  const handleSaveDocument = async (formData: DocumentFormData, file?: File, reportFile?: File) => {
     try {
       let file_url = formData.file_url;
       let file_name = formData.file_name;
       let file_type = formData.file_type;
 
+      // Handle original document file
       if (file) {
-        file_url = URL.createObjectURL(file);
-        file_name = file.name;
-        file_type = file.type;
+        try {
+          const base64 = await convertFileToBase64(file);
+          file_url = base64;
+          file_name = file.name;
+          file_type = file.type;
+        } catch (error) {
+          console.error('Error converting file to base64:', error);
+          alert('Файл хадгалахад алдаа гарлаа');
+          return;
+        }
+      }
+
+      // ✅ Handle report file
+      let report_file_url = formData.report_file_url;
+      let report_file_name = formData.report_file_name;
+      let report_file_type = formData.report_file_type;
+
+      if (reportFile) {
+        try {
+          const base64 = await convertFileToBase64(reportFile);
+          report_file_url = base64;
+          report_file_name = reportFile.name;
+          report_file_type = reportFile.type;
+        } catch (error) {
+          console.error('Error converting report file to base64:', error);
+          alert('Тайлан файл хадгалахад алдаа гарлаа');
+          return;
+        }
       }
 
       const documentData = {
         ...formData,
         file_url,
         file_name,
-        file_type
+        file_type,
+        report_file_url,
+        report_file_name,
+        report_file_type
       };
 
       let savedDocumentId = formData.id;
@@ -110,6 +149,26 @@ export default function DocumentsPage({ tasks }: DocumentsPageProps) {
     } catch (error) {
       console.error('Error deleting document:', error);
       alert('Албан бичиг устгахад алдаа гарлаа');
+    }
+  };
+
+  // ✅ Download report file
+  const handleDownloadReport = (document: DocumentFormData) => {
+    if (!document.report_file_url || !document.report_file_name) {
+      alert('Тайлан файл олдсонгүй');
+      return;
+    }
+
+    try {
+      const link = document.createElement('a');
+      link.href = document.report_file_url;
+      link.download = document.report_file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Тайлан татахад алдаа гарлаа');
     }
   };
 
@@ -253,6 +312,19 @@ export default function DocumentsPage({ tasks }: DocumentsPageProps) {
                     <td className="py-3 px-4">
                       <div className="text-sm text-slate-900 font-medium">{doc.sender}</div>
                       <div className="text-xs text-slate-500 truncate max-w-xs">{doc.summary}</div>
+                      {/* ✅ Show report indicator */}
+                      {doc.status === 'Completed' && doc.report_file_name && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadReport(doc);
+                          }}
+                          className="flex items-center gap-1 mt-1 text-xs text-green-700 hover:text-green-800 hover:underline"
+                        >
+                          <Download className="w-3 h-3" />
+                          {doc.report_file_name}
+                        </button>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-900 font-mono">
                       {doc.document_number}

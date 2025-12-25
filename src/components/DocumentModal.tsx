@@ -14,12 +14,16 @@ export interface DocumentFormData {
   file_url?: string;
   file_name?: string;
   file_type?: string;
+  // ✅ Report/Response fields
+  report_file_url?: string;
+  report_file_name?: string;
+  report_file_type?: string;
 }
 
 interface DocumentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (document: DocumentFormData, file?: File) => void;
+  onSave: (document: DocumentFormData, file?: File, reportFile?: File) => void;
   document?: DocumentFormData | null;
 }
 
@@ -33,12 +37,14 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
     status: 'Pending',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedReportFile, setSelectedReportFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (document) {
       setFormData(document);
       setSelectedFile(null);
+      setSelectedReportFile(null);
     } else {
       setFormData({
         received_date: new Date().toISOString().split('T')[0],
@@ -49,6 +55,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
         status: 'Pending',
       });
       setSelectedFile(null);
+      setSelectedReportFile(null);
     }
   }, [document, isOpen]);
 
@@ -77,6 +84,31 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
     }
   };
 
+  const handleReportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        alert('PDF, DOC, DOCX, PNG, JPG файл хавсаргана уу');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Файлын хэмжээ 10MB-аас бага байх ёстой');
+        return;
+      }
+
+      setSelectedReportFile(file);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -92,7 +124,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
 
     setUploading(true);
     try {
-      onSave(formData, selectedFile || undefined);
+      onSave(formData, selectedFile || undefined, selectedReportFile || undefined);
       onClose();
     } finally {
       setUploading(false);
@@ -282,6 +314,53 @@ export default function DocumentModal({ isOpen, onClose, onSave, document }: Doc
               </label>
             </div>
           </div>
+
+          {/* ✅ ШИНЭ: Report/Response Upload - ЗӨВХӨН status="Completed" үед харагдана */}
+          {formData.status === 'Completed' && (
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                📄 Хариу/Тайлан хавсаргах (заавал биш)
+              </label>
+              <div className="border-2 border-dashed border-green-300 rounded-lg p-6 hover:border-green-400 transition-colors">
+                <input
+                  type="file"
+                  id="report-file-upload"
+                  onChange={handleReportFileChange}
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  className="hidden"
+                />
+                <label
+                  htmlFor="report-file-upload"
+                  className="flex flex-col items-center justify-center cursor-pointer"
+                >
+                  {selectedReportFile ? (
+                    <>
+                      <FileText className="w-10 h-10 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{selectedReportFile.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {(selectedReportFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </>
+                  ) : formData.report_file_name ? (
+                    <>
+                      <FileText className="w-10 h-10 text-green-600 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">{formData.report_file_name}</p>
+                      <p className="text-xs text-green-600 mt-1">Одоогийн тайлан</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-10 h-10 text-green-400 mb-2" />
+                      <p className="text-sm text-slate-700 font-medium">Тайлан хавсаргах</p>
+                      <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG</p>
+                    </>
+                  )}
+                </label>
+              </div>
+              <p className="text-xs text-slate-600 mt-2">
+                💡 Энэ албан бичигт хариу өгсөн эсвэл тайлан бичсэн бол энд хавсаргаж болно
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

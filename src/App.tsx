@@ -34,6 +34,13 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    // Hash шалгах - password reset
+    const hash = window.location.hash || "";
+    if (hash.includes("#reset") || hash.includes("type=recovery")) {
+      setCurrentView('reset-password');
+      return;
+    }
+
     if (isLoggedIn) {
       setCurrentView('dashboard');
     } else {

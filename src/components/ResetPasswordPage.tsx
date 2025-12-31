@@ -33,46 +33,68 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
   const { updatePassword } = useAuth();
 
   useEffect(() => {
+    console.log('🔍 ResetPasswordPage mounted');
+    console.log('🔍 Hash:', window.location.hash);
+    
     // Hash-с token авах
     const hash = window.location.hash || "";
     
     if (hash.includes("access_token") && hash.includes("type=recovery")) {
+      console.log('✅ Recovery tokens found in hash!');
       const params = new URLSearchParams(hash.replace("#", "?"));
       const access_token = params.get("access_token");
       const refresh_token = params.get("refresh_token");
+      
+      console.log('🔑 Access token:', access_token ? access_token.slice(0, 20) + '...' : 'null');
+      console.log('🔑 Refresh token:', refresh_token ? refresh_token.slice(0, 20) + '...' : 'null');
 
       if (access_token && refresh_token) {
+        console.log('⏳ Creating session...');
         // Supabase session үүсгэх
         supabase.auth.setSession({
           access_token,
           refresh_token,
         }).then(({ data, error }) => {
           if (error) {
+            console.error('❌ Session error:', error);
             setError("Session үүсгэхэд алдаа гарлаа");
           } else {
+            console.log('✅ Session created successfully!', data);
             setSessionReady(true);
           }
         });
+      } else {
+        console.error('❌ Tokens are missing!');
       }
     } else {
+      console.log('⚠️ No recovery tokens in hash, checking current session...');
       // Одоогийн session шалгах
       supabase.auth.getSession().then(({ data: { session } }) => {
+        console.log('📋 Current session:', session ? 'EXISTS' : 'MISSING');
         if (session) {
+          console.log('✅ Using existing session');
           setSessionReady(true);
         } else {
+          console.error('❌ No session available!');
           setError("Auth session missing!");
         }
       });
     }
 
     // onAuthStateChange listener
+    console.log('👂 Setting up auth state listener...');
     const { data } = supabase.auth.onAuthStateChange((event) => {
+      console.log('🔔 Auth event:', event);
       if (event === 'PASSWORD_RECOVERY') {
+        console.log('✅ PASSWORD_RECOVERY event received!');
         setSessionReady(true);
       }
     });
 
-    return () => data.subscription.unsubscribe();
+    return () => {
+      console.log('🧹 Cleaning up auth listener');
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   const getPasswordStrength = (password: string): { label: string; color: string; width: string } => {
@@ -95,31 +117,39 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🚀 Form submitted');
+    console.log('📊 Session ready:', sessionReady);
     setError('');
 
     if (!sessionReady) {
+      console.error('❌ Session not ready!');
       setError('Session бэлэн биш байна');
       return;
     }
 
     if (!allRequirementsMet) {
+      console.error('❌ Password requirements not met');
       setError('Нууц үг шаардлага хангахгүй байна');
       return;
     }
 
     if (password !== confirmPassword) {
+      console.error('❌ Passwords do not match');
       setError('Нууц үг таарахгүй байна');
       return;
     }
 
     setIsLoading(true);
+    console.log('⏳ Updating password...');
 
     try {
       const { error } = await updatePassword(password);
 
       if (error) {
+        console.error('❌ Update password error:', error);
         setError(error);
       } else {
+        console.log('✅ Password updated successfully!');
         // Hash цэвэрлэх
         window.history.replaceState(null, '', '/');
         onPasswordReset();
@@ -128,6 +158,9 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
       setIsLoading(false);
     }
   };
+
+  // Debug render
+  console.log('🎨 Rendering - sessionReady:', sessionReady, 'error:', error);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">

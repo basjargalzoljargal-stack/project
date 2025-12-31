@@ -17,25 +17,55 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Backend API URL
-const API_URL = "https://my-website-backend-3yoe.onrender.com";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-    const role = localStorage.getItem("userRole");
-    setIsLoggedIn(loggedIn);
-    setUserRole(role);
-    setLoading(false);
+    // Supabase session шалгах
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsLoggedIn(true);
+        // User profile-с role авах
+        supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data }) => {
+            setUserRole(data?.role || 'user');
+          });
+      }
+      setLoading(false);
+    });
+
+    // Auth state change listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+      if (session) {
+        supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data }) => {
+            setUserRole(data?.role || 'user');
+          });
+      } else {
+        setUserRole(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (username: string, password: string) => {
     try {
-      const { data: profiles, error: profileError } = await supabase
+      // Profile шалгах
+      const { data: profiles } = await supabase
         .from('user_profiles')
         .select('id, email, status, role')
         .eq('email', username)
@@ -49,61 +79,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: "Таны бүртгэл татгалзагдсан байна. Админтай холбогдоно уу." };
       }
 
-      const res = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
+      // Supabase auth login
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: username,
+        password: password,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        return { error: data.message || "Login failed" };
+      if (error) {
+        return { error: "Хэрэглэгчийн нэр эсвэл нууц үг буруу байна" };
       }
 
-      const user = {
-        id: data.userId,
-        username: data.username,
-        role: data.role || "user"
-      };
-
-      localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userId", data.userId);
-      localStorage.setItem("userRole", data.role || "user");
-      localStorage.setItem("username", data.username);
-      localStorage.setItem("user", JSON.stringify(user));
-
       setIsLoggedIn(true);
-      setUserRole(data.role || "user");
+      setUserRole(profiles?.role || 'user');
 
       return { error: null };
     } catch (err) {
-      return { error: "Backend холбогдсонгүй" };
+      return { error: "Нэвтрэхэд алдаа гарлаа" };
     }
   };
 
   const signUp = async (username: string, password: string) => {
-    try {
-      const res = await fetch(`${API_URL}/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        return { error: data.message || "Бүртгэл амжилтгүй" };
-      }
-
-      return { error: null };
-    } catch (err) {
-      return { error: "Backend холбогдсонгүй" };
-    }
+    return signUpWithEmail(username, password, username);
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName: string) => {
@@ -182,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const requestPasswordReset = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: window.location.origin + '/#reset',
       });
 
       if (error) {
@@ -212,11 +208,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("username");
-    localStorage.removeItem("user");
     supabase.auth.signOut();
     setIsLoggedIn(false);
     setUserRole(null);

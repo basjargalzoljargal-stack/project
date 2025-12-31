@@ -34,6 +34,7 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
 
   useEffect(() => {
     console.log('🔍 ResetPasswordPage mounted');
+    console.log('🔍 Full URL:', window.location.href);
     console.log('🔍 Hash:', window.location.hash);
     
     // Hash-с token авах
@@ -41,11 +42,27 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
     
     if (hash.includes("access_token") && hash.includes("type=recovery")) {
       console.log('✅ Recovery tokens found in hash!');
-      const params = new URLSearchParams(hash.replace("#", "?"));
+      
+      // ЗАСВАР: Бүх # => ? болгох, дараа нь &-уудыг зөв parse хийх
+      // Hash format: #reset#access_token=...&refresh_token=...
+      // Үр дүн: ?reset?access_token=...&refresh_token=...
+      // Дараа нь эхний "?reset?" устгаад зөвхөн access_token хэсгийг авна
+      
+      let hashParams = hash;
+      // #reset# => устгах
+      if (hashParams.startsWith('#reset#')) {
+        hashParams = hashParams.replace('#reset#', '');
+      } else if (hashParams.startsWith('#')) {
+        hashParams = hashParams.substring(1);
+      }
+      
+      console.log('🔧 Cleaned hash:', hashParams);
+      
+      const params = new URLSearchParams(hashParams);
       const access_token = params.get("access_token");
       const refresh_token = params.get("refresh_token");
       
-      console.log('🔑 Access token:', access_token ? access_token.slice(0, 20) + '...' : 'null');
+      console.log('🔑 Access token:', access_token ? access_token.slice(0, 30) + '...' : 'null');
       console.log('🔑 Refresh token:', refresh_token ? refresh_token.slice(0, 20) + '...' : 'null');
 
       if (access_token && refresh_token) {
@@ -64,7 +81,7 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
           }
         });
       } else {
-        console.error('❌ Tokens are missing!');
+        console.error('❌ Tokens are missing!', { access_token: !!access_token, refresh_token: !!refresh_token });
       }
     } else {
       console.log('⚠️ No recovery tokens in hash, checking current session...');

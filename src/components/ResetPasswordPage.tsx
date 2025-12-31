@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle, Check, X, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Card from './ui/Card';
@@ -28,7 +29,51 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const { updatePassword } = useAuth();
+
+  useEffect(() => {
+    // Hash-с token авах
+    const hash = window.location.hash || "";
+    
+    if (hash.includes("access_token") && hash.includes("type=recovery")) {
+      const params = new URLSearchParams(hash.replace("#", "?"));
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+
+      if (access_token && refresh_token) {
+        // Supabase session үүсгэх
+        supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        }).then(({ data, error }) => {
+          if (error) {
+            setError("Session үүсгэхэд алдаа гарлаа");
+          } else {
+            setSessionReady(true);
+          }
+        });
+      }
+    } else {
+      // Одоогийн session шалгах
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setSessionReady(true);
+        } else {
+          setError("Auth session missing!");
+        }
+      });
+    }
+
+    // onAuthStateChange listener
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setSessionReady(true);
+      }
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   const getPasswordStrength = (password: string): { label: string; color: string; width: string } => {
     const passedRequirements = passwordRequirements.filter(req => req.test(password)).length;
@@ -52,6 +97,11 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
     e.preventDefault();
     setError('');
 
+    if (!sessionReady) {
+      setError('Session бэлэн биш байна');
+      return;
+    }
+
     if (!allRequirementsMet) {
       setError('Нууц үг шаардлага хангахгүй байна');
       return;
@@ -70,6 +120,8 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
       if (error) {
         setError(error);
       } else {
+        // Hash цэвэрлэх
+        window.history.replaceState(null, '', '/');
         onPasswordReset();
       }
     } finally {
@@ -107,7 +159,7 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
                   placeholder="••••••••"
                   leftIcon={<Lock className="w-5 h-5" />}
                   required
-                  disabled={isLoading}
+                  disabled={isLoading || !sessionReady}
                 />
                 <button
                   type="button"
@@ -168,7 +220,7 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
                 placeholder="••••••••"
                 leftIcon={<Lock className="w-5 h-5" />}
                 required
-                disabled={isLoading}
+                disabled={isLoading || !sessionReady}
               />
               <button
                 type="button"
@@ -199,7 +251,7 @@ export default function ResetPasswordPage({ onPasswordReset }: ResetPasswordPage
                 fullWidth
                 size="lg"
                 loading={isLoading}
-                disabled={isLoading}
+                disabled={isLoading || !sessionReady}
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
                 Нууц үг сэргээх

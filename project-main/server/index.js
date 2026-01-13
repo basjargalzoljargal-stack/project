@@ -144,7 +144,42 @@ const initDB = async () => {
 };
 
 initDB();
+// 4. Админ үүсгэх/нууц үг reset хийх
+const adminCheck = await pool.query(`SELECT * FROM users WHERE username = 'admin';`);
+const adminPassword = 'Mongol1990';
+const hash = await bcrypt.hash(adminPassword, 10);
 
+if (adminCheck.rows.length === 0) {
+  await pool.query(
+    `INSERT INTO users (username, password_hash, role, approved) VALUES ($1, $2, $3, $4);`,
+    ['admin', hash, 'admin', true]
+  );
+  console.log("✅ Анхны админ үүсгэгдлээ (username: admin, password: Mongol1990)");
+} else {
+  await pool.query(
+    `UPDATE users SET password_hash = $1, role = 'admin', approved = true WHERE username = 'admin';`,
+    [hash]
+  );
+  console.log("✅ 'admin' хэрэглэгч засагдлаа - нууц үг: Mongol1990");
+}
+
+// ↓↓↓ ЭНИЙГ НЭМНЭ ↓↓↓
+// 4.5. Таны хэрэглэгчийн нууц үг солих
+const userCheck = await pool.query(`SELECT * FROM users WHERE username = 'basjargalzoljargal@gmail.com';`);
+if (userCheck.rows.length > 0) {
+  const userPassword = 'MyNewPassword2026!';
+  const userHash = await bcrypt.hash(userPassword, 10);
+  await pool.query(
+    `UPDATE users SET password_hash = $1, approved = true WHERE username = 'basjargalzoljargal@gmail.com';`,
+    [userHash]
+  );
+  console.log("✅ basjargalzoljargal@gmail.com нууц үг шинэчлэгдлээ: MyNewPassword2026!");
+}
+// ↑↑↑ ЭНИЙГ НЭМНЭ ↑↑↑
+
+// 5. Tasks table үүсгэх
+await pool.query(`
+  
 /* ======================
    TEST ROUTE
 ====================== */
